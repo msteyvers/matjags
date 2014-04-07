@@ -1,0 +1,270 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>Example script: comparing JAGS to WinBUGS</title><meta name="generator" content="MATLAB 7.13"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2011-10-31"><meta name="DC.source" content="Example3.m"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head><body><div class="content"><h1>Example script: comparing JAGS to WinBUGS</h1><!--introduction--><p>This example illustrates how similar the JAGS-Matlab interface is to the WinBUGS-Matbugs interface</p><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#1">Model definition</a></li><li><a href="#2">Initialize variables and parameters</a></li><li><a href="#3">Calling JAGS to sample</a></li><li><a href="#4">Analyze JAGS samples</a></li><li><a href="#5">Use WinBUGS to Sample through the MatBUGS interface</a></li><li><a href="#6">Analyze WinBUGS samples</a></li></ul></div><h2>Model definition<a name="1"></a></h2><p>The BUGS example was taken from the WinBUGS course developed by Michael Lee and Eric-Jan Wagenmakers at <a href="http://www.ejwagenmakers.com/BayesCourse/BayesBook.html">http://www.ejwagenmakers.com/BayesCourse/BayesBook.html</a></p><p>In this example, the goal is to infer a rate with the following model:</p><p>
+<table border=0><tr><td>
+model {<br>
+&nbsp;&nbsp;  # Prior on Rate<br>
+&nbsp;&nbsp;  theta ~ dbeta(1,1)<br>
+&nbsp;&nbsp;  # Observed Counts<br>
+&nbsp;&nbsp;  k ~ dbin(theta,n)<br>
+}<br>
+</td><td>
+</table>
+</p><p>This script is stored in the text file "Rate_1.txt" The data is initialized in Matlab with variables k (number of successes) and n (total number of observations). In the rate problem, the goal is to get samples of theta, the rate of Beta distribution in the model</p><h2>Initialize variables and parameters<a name="2"></a></h2><pre class="codeinput">clear;
+clc
+
+<span class="comment">% Data</span>
+k=8;  <span class="comment">% number of observed successes</span>
+n=10; <span class="comment">% number of observations total</span>
+
+<span class="comment">% JAGS Parameters</span>
+nchains  = 7; <span class="comment">% How Many Chains?</span>
+nburnin  = 1000; <span class="comment">% How Many Burn-in Samples?</span>
+nsamples = 5000;  <span class="comment">% How Many Recorded Samples?</span>
+
+<span class="comment">% Assign Matlab Variables to the Observed JAGS Nodes</span>
+datastruct = struct(<span class="string">'k'</span>,k,<span class="string">'n'</span>,n);
+
+<span class="comment">% Initialize the values for each latent variable in each chain</span>
+<span class="keyword">for</span> i=1:nchains
+    S.theta = 0.5; <span class="comment">% An Initial Value for the Success Rate</span>
+    init0(i) = S;
+<span class="keyword">end</span>
+</pre><h2>Calling JAGS to sample<a name="3"></a></h2><pre class="codeinput"><span class="keyword">if</span> matlabpool(<span class="string">'size'</span>) == 0
+    matlabpool <span class="string">open</span> <span class="string">7</span>; <span class="comment">% initialize 7 local workers</span>
+<span class="keyword">end</span>
+doparallel = 1; <span class="comment">% use parallelization</span>
+fprintf( <span class="string">'Running JAGS...\n'</span> );
+tic
+[samples, stats, structArray] = matjags( <span class="keyword">...</span>
+    datastruct, <span class="keyword">...</span><span class="comment">                     % Observed data</span>
+    fullfile(pwd, <span class="string">'Rate_1.txt'</span>), <span class="keyword">...</span><span class="comment">    % File that contains model definition</span>
+    init0, <span class="keyword">...</span><span class="comment">                          % Initial values for latent variables</span>
+    <span class="string">'doparallel'</span> , doparallel, <span class="keyword">...</span><span class="comment">      % Parallelization flag</span>
+    <span class="string">'nchains'</span>, nchains,<span class="keyword">...</span><span class="comment">              % Number of MCMC chains</span>
+    <span class="string">'nburnin'</span>, nburnin,<span class="keyword">...</span><span class="comment">              % Number of burnin steps</span>
+    <span class="string">'nsamples'</span>, nsamples, <span class="keyword">...</span><span class="comment">           % Number of samples to extract</span>
+    <span class="string">'thin'</span>, 1, <span class="keyword">...</span><span class="comment">                      % Thinning parameter</span>
+    <span class="string">'monitorparams'</span>, {<span class="string">'theta'</span>}, <span class="keyword">...</span><span class="comment">     % List of latent variables to monitor</span>
+    <span class="string">'savejagsoutput'</span> , 1 , <span class="keyword">...</span><span class="comment">          % Save command line output produced by JAGS?</span>
+    <span class="string">'verbosity'</span> , 1 , <span class="keyword">...</span><span class="comment">               % 0=do not produce any output; 1=minimal text output; 2=maximum text output</span>
+    <span class="string">'cleanup'</span> , 0 );                    <span class="comment">% clean up of temporary files?</span>
+
+toc
+<span class="comment">% Note that execution times do not reflect linear speedfactor factors when execution times are short. In this case,</span>
+<span class="comment">% the overhead produced by the file reading and writing will dominate performance.</span>
+</pre><pre class="codeoutput">Running JAGS...
+Running chain 1 (parallel execution)
+Running chain 2 (parallel execution)
+Running chain 3 (parallel execution)
+Running chain 4 (parallel execution)
+Running chain 5 (parallel execution)
+Running chain 6 (parallel execution)
+Running chain 7 (parallel execution)
+Elapsed time is 0.569687 seconds.
+</pre><h2>Analyze JAGS samples<a name="4"></a></h2><p>samples.theta contains a matrix of samples where each row corresponds to the samples from a single MCMC chain</p><pre class="codeinput">figure(1);clf;hold <span class="string">on</span>;
+eps=.01;bins=[eps:eps:1-eps];
+count=hist(samples.theta,bins);
+count=count/sum(count)/eps;
+ph=plot(bins,count,<span class="string">'k-'</span>);
+set(gca,<span class="string">'box'</span>,<span class="string">'on'</span>,<span class="string">'fontsize'</span>,14);
+xlabel(<span class="string">'Rate'</span>,<span class="string">'fontsize'</span>,16);
+ylabel(<span class="string">'Posterior Density'</span>,<span class="string">'fontsize'</span>,16);
+title( <span class="string">'JAGS'</span> );
+</pre><img vspace="5" hspace="5" src="Example3_01.png" alt=""> <h2>Use WinBUGS to Sample through the MatBUGS interface<a name="5"></a></h2><pre class="codeinput">fprintf( <span class="string">'Running WinBUGS...\n'</span> );
+tic
+[samples, stats] = matbugs(datastruct, <span class="keyword">...</span>
+    fullfile(pwd, <span class="string">'Rate_1.txt'</span>), <span class="keyword">...</span>
+    <span class="string">'init'</span>, init0, <span class="keyword">...</span>
+    <span class="string">'nChains'</span>, nchains, <span class="keyword">...</span>
+    <span class="string">'view'</span>, 0, <span class="string">'nburnin'</span>, nburnin, <span class="string">'nsamples'</span>, nsamples, <span class="keyword">...</span>
+    <span class="string">'thin'</span>, 1, <span class="string">'DICstatus'</span>, 0, <span class="string">'refreshrate'</span>,100, <span class="keyword">...</span>
+    <span class="string">'monitorParams'</span>, {<span class="string">'theta'</span>}, <span class="keyword">...</span>
+    <span class="string">'Bugdir'</span>, <span class="string">'C:/WinBUGS14'</span>);
+toc
+</pre><pre class="codeoutput">Running WinBUGS...
+Elapsed time is 5.958346 seconds.
+</pre><h2>Analyze WinBUGS samples<a name="6"></a></h2><pre class="codeinput">figure(2);clf;hold <span class="string">on</span>;
+eps=.01;bins=[eps:eps:1-eps];
+count=hist(samples.theta,bins);
+count=count/sum(count)/eps;
+ph=plot(bins,count,<span class="string">'k-'</span>);
+set(gca,<span class="string">'box'</span>,<span class="string">'on'</span>,<span class="string">'fontsize'</span>,14);
+xlabel(<span class="string">'Rate'</span>,<span class="string">'fontsize'</span>,16);
+ylabel(<span class="string">'Posterior Density'</span>,<span class="string">'fontsize'</span>,16);
+title( <span class="string">'WinBUGS'</span> );
+</pre><img vspace="5" hspace="5" src="Example3_02.png" alt=""> <p class="footer"><br>
+      Published with MATLAB&reg; 7.13<br></p></div><!--
+##### SOURCE BEGIN #####
+%% Example script: comparing JAGS to WinBUGS 
+% This example illustrates how similar the JAGS-Matlab interface is to the WinBUGS-Matbugs interface
+%
+%%% Model definition
+% The BUGS example was taken from the WinBUGS course developed by Michael Lee and Eric-Jan
+% Wagenmakers at <http://www.ejwagenmakers.com/BayesCourse/BayesBook.html>
+%
+% In this example, the goal is to infer a rate with the following model: 
+%
+% <html>
+% <table border=0><tr><td>
+% model {<br>
+% &nbsp;&nbsp;  # Prior on Rate<br>
+% &nbsp;&nbsp;  theta ~ dbeta(1,1)<br>
+% &nbsp;&nbsp;  # Observed Counts<br>
+% &nbsp;&nbsp;  k ~ dbin(theta,n)<br>
+% }<br>
+% </td><td>
+% </table>
+% </html>
+%
+% This script is stored in the text file "Rate_1.txt"
+% The data is initialized in Matlab with variables k (number of successes) and n (total number of observations). In the rate problem, the
+% goal is to get samples of theta, the rate of Beta distribution in the model 
+
+%% Initialize variables and parameters
+clear;
+clc
+
+% Data
+k=8;  % number of observed successes
+n=10; % number of observations total
+
+% JAGS Parameters
+nchains  = 7; % How Many Chains?
+nburnin  = 1000; % How Many Burn-in Samples?
+nsamples = 5000;  % How Many Recorded Samples?
+
+% Assign Matlab Variables to the Observed JAGS Nodes
+datastruct = struct('k',k,'n',n);
+
+% Initialize the values for each latent variable in each chain
+for i=1:nchains
+    S.theta = 0.5; % An Initial Value for the Success Rate
+    init0(i) = S;
+end
+
+%% Calling JAGS to sample
+if matlabpool('size') == 0
+    matlabpool open 7; % initialize 7 local workers 
+end
+doparallel = 1; % use parallelization
+fprintf( 'Running JAGS...\n' );
+tic
+[samples, stats, structArray] = matjags( ...
+    datastruct, ...                     % Observed data   
+    fullfile(pwd, 'Rate_1.txt'), ...    % File that contains model definition
+    init0, ...                          % Initial values for latent variables
+    'doparallel' , doparallel, ...      % Parallelization flag
+    'nchains', nchains,...              % Number of MCMC chains
+    'nburnin', nburnin,...              % Number of burnin steps
+    'nsamples', nsamples, ...           % Number of samples to extract
+    'thin', 1, ...                      % Thinning parameter
+    'monitorparams', {'theta'}, ...     % List of latent variables to monitor
+    'savejagsoutput' , 1 , ...          % Save command line output produced by JAGS?
+    'verbosity' , 1 , ...               % 0=do not produce any output; 1=minimal text output; 2=maximum text output
+    'cleanup' , 0 );                    % clean up of temporary files?
+    
+toc
+% Note that execution times do not reflect linear speedfactor factors when execution times are short. In this case,
+% the overhead produced by the file reading and writing will dominate performance.
+
+%% Analyze JAGS samples
+% samples.theta contains a matrix of samples where each row corresponds to the samples from a single MCMC chain
+figure(1);clf;hold on;
+eps=.01;bins=[eps:eps:1-eps];
+count=hist(samples.theta,bins);
+count=count/sum(count)/eps;
+ph=plot(bins,count,'k-');
+set(gca,'box','on','fontsize',14);
+xlabel('Rate','fontsize',16);
+ylabel('Posterior Density','fontsize',16);
+title( 'JAGS' );
+
+%% Use WinBUGS to Sample through the MatBUGS interface
+fprintf( 'Running WinBUGS...\n' );
+tic
+[samples, stats] = matbugs(datastruct, ...
+    fullfile(pwd, 'Rate_1.txt'), ...
+    'init', init0, ...
+    'nChains', nchains, ...
+    'view', 0, 'nburnin', nburnin, 'nsamples', nsamples, ...
+    'thin', 1, 'DICstatus', 0, 'refreshrate',100, ...
+    'monitorParams', {'theta'}, ...
+    'Bugdir', 'C:/WinBUGS14');
+toc
+
+%% Analyze WinBUGS samples
+figure(2);clf;hold on;
+eps=.01;bins=[eps:eps:1-eps];
+count=hist(samples.theta,bins);
+count=count/sum(count)/eps;
+ph=plot(bins,count,'k-');
+set(gca,'box','on','fontsize',14);
+xlabel('Rate','fontsize',16);
+ylabel('Posterior Density','fontsize',16);
+title( 'WinBUGS' );
+
+##### SOURCE END #####
+--></body></html>

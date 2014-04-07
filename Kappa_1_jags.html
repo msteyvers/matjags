@@ -1,0 +1,216 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>Kappa_1_jags</title><meta name="generator" content="MATLAB 7.12"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2011-07-27"><meta name="DC.source" content="Kappa_1_jags.m"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head><body><div class="content"><h2>Contents</h2><div><ul><li><a href="#1">Kappa Coefficient of Agreement</a></li><li><a href="#2">Use JAGS to Sample</a></li><li><a href="#4">Posterior means:</a></li><li><a href="#5">Use WinBUGS to Sample</a></li></ul></div><h2>Kappa Coefficient of Agreement<a name="1"></a></h2><p>Example from the WinBUGS course developed by Michael Lee and Eric-Jan Wagenmakers. This example was modified to illustrate how to use MATJAGS in a way very similar to MATBUGS</p><pre class="codeinput">clear;
+clc;
+
+<span class="comment">% Data (Observed Variables)</span>
+d=[14 4 5 210];
+<span class="comment">%d=[20 7 103 417];</span>
+<span class="comment">%d=[157 0 13 0];</span>
+
+<span class="comment">% Derived Variables</span>
+n=sum(d);
+
+<span class="comment">% WinBUGS Parameters</span>
+nchains=7; <span class="comment">% How Many Chains?</span>
+nburnin=1000; <span class="comment">% How Many Burn-in Samples?</span>
+nsamples=1500; <span class="comment">% How Many Recorded Samples?</span>
+
+<span class="comment">% Assign Matlab Variables to the Observed WinBUGS Nodes</span>
+datastruct = struct(<span class="string">'d'</span>,d,<span class="string">'n'</span>,n);
+
+<span class="comment">% Initialize Unobserved Variables</span>
+<span class="keyword">for</span> i=1:nchains
+    S.alpha = 0.5; <span class="comment">% An Initial Value</span>
+    S.beta = 0.5; <span class="comment">% An Initial Value</span>
+    S.gamma = 0.5; <span class="comment">% An Initial Value</span>
+    init0(i) = S;
+<span class="keyword">end</span>
+</pre><h2>Use JAGS to Sample<a name="2"></a></h2><pre class="codeinput">tic
+doparallel = 0;
+fprintf( <span class="string">'Running JAGS\n'</span> );
+<span class="comment">% fprintf( 'Running chains in parallel across computing nodes...\n' );</span>
+<span class="comment">% doparallel = 1;</span>
+<span class="comment">% if matlabpool('size') == 0</span>
+<span class="comment">%     matlabpool open 2; % initialize 2 local workers (set to 7 with a 8-core machine)</span>
+<span class="comment">% end</span>
+[samples2, stats2 ] = matjags( <span class="keyword">...</span>
+        datastruct, <span class="keyword">...</span>
+		fullfile(pwd, <span class="string">'Kappa_1.txt'</span>), <span class="keyword">...</span>
+		init0, <span class="keyword">...</span>
+        <span class="string">'doparallel'</span> , doparallel, <span class="keyword">...</span>
+        <span class="string">'nchains'</span>, nchains,<span class="keyword">...</span>
+		<span class="string">'nburnin'</span>, nburnin,<span class="keyword">...</span>
+        <span class="string">'nsamples'</span>, nsamples, <span class="keyword">...</span>
+		<span class="string">'thin'</span>, 1, <span class="keyword">...</span>
+		<span class="string">'monitorparams'</span>, {<span class="string">'kappa'</span>,<span class="string">'xi'</span>,<span class="string">'psi'</span>,<span class="string">'alpha'</span>,<span class="string">'beta'</span>,<span class="string">'gamma'</span>,<span class="string">'pi'</span>}, <span class="keyword">...</span>
+		<span class="string">'savejagsoutput'</span> , 1 , <span class="keyword">...</span>
+        <span class="string">'verbosity'</span> , 1 , <span class="keyword">...</span>
+        <span class="string">'cleanup'</span> , 0 , <span class="keyword">...</span>
+        <span class="string">'workingdir'</span> , <span class="string">'tmpjags'</span> );
+</pre><pre class="codeoutput">Running JAGS
+Running chain 1 (serial execution)
+Running chain 2 (serial execution)
+Running chain 3 (serial execution)
+Running chain 4 (serial execution)
+Running chain 5 (serial execution)
+Running chain 6 (serial execution)
+Running chain 7 (serial execution)
+</pre><pre class="codeinput">toc
+</pre><pre class="codeoutput">Elapsed time is 2.026617 seconds.
+</pre><h2>Posterior means:<a name="4"></a></h2><pre class="codeinput">stats2.mean
+</pre><pre class="codeoutput">
+ans = 
+
+    kappa: 0.6982
+       xi: 0.9546
+      psi: 0.8475
+    alpha: 0.0807
+     beta: 0.7514
+    gamma: 0.9724
+       pi: [0.0607 0.0200 0.0254 0.8939]
+
+</pre><h2>Use WinBUGS to Sample<a name="5"></a></h2><p>tic fprintf( 'Running WinBUGS\n' ); [samples, stats] = matbugs(datastruct, ...     fullfile(pwd, 'Kappa_1.txt'), ...     'init', init0, ...     'nChains', nchains, ...     'view', 0, 'nburnin', nburnin, 'nsamples', nsamples, ...     'thin', 1, 'DICstatus', 0, 'refreshrate',100, ...     'monitorParams', {'kappa','xi','psi','alpha','beta','gamma','pi'}, ...     'Bugdir', 'C:/WinBUGS14'); toc stats.mean</p><p class="footer"><br>
+      Published with MATLAB&reg; 7.12<br></p></div><!--
+##### SOURCE BEGIN #####
+%% Kappa Coefficient of Agreement
+% Example from the WinBUGS course developed by Michael Lee and Eric-Jan
+% Wagenmakers. This example was modified to illustrate how to use
+% MATJAGS in a way very similar to MATBUGS
+
+clear;
+clc;
+
+% Data (Observed Variables)
+d=[14 4 5 210];
+%d=[20 7 103 417];
+%d=[157 0 13 0];
+
+% Derived Variables
+n=sum(d);
+
+% WinBUGS Parameters
+nchains=7; % How Many Chains?
+nburnin=1000; % How Many Burn-in Samples?
+nsamples=1500; % How Many Recorded Samples?
+
+% Assign Matlab Variables to the Observed WinBUGS Nodes
+datastruct = struct('d',d,'n',n);
+
+% Initialize Unobserved Variables
+for i=1:nchains
+    S.alpha = 0.5; % An Initial Value
+    S.beta = 0.5; % An Initial Value
+    S.gamma = 0.5; % An Initial Value
+    init0(i) = S;
+end
+
+
+%% Use JAGS to Sample
+tic
+doparallel = 0;
+fprintf( 'Running JAGS\n' );
+% fprintf( 'Running chains in parallel across computing nodes...\n' );
+% doparallel = 1;
+% if matlabpool('size') == 0
+%     matlabpool open 2; % initialize 2 local workers (set to 7 with a 8-core machine)  
+% end
+[samples2, stats2 ] = matjags( ...
+        datastruct, ...        
+		fullfile(pwd, 'Kappa_1.txt'), ...
+		init0, ...
+        'doparallel' , doparallel, ...
+        'nchains', nchains,...
+		'nburnin', nburnin,...
+        'nsamples', nsamples, ...
+		'thin', 1, ...
+		'monitorparams', {'kappa','xi','psi','alpha','beta','gamma','pi'}, ...
+		'savejagsoutput' , 1 , ...
+        'verbosity' , 1 , ...
+        'cleanup' , 0 , ...
+        'workingdir' , 'tmpjags' );
+
+%%     
+toc
+
+%% Posterior means:
+stats2.mean
+
+%% Use WinBUGS to Sample
+% tic
+% fprintf( 'Running WinBUGS\n' );
+% [samples, stats] = matbugs(datastruct, ...
+%     fullfile(pwd, 'Kappa_1.txt'), ...
+%     'init', init0, ...
+%     'nChains', nchains, ...
+%     'view', 0, 'nburnin', nburnin, 'nsamples', nsamples, ...
+%     'thin', 1, 'DICstatus', 0, 'refreshrate',100, ...
+%     'monitorParams', {'kappa','xi','psi','alpha','beta','gamma','pi'}, ...
+%     'Bugdir', 'C:/WinBUGS14');
+% toc
+% stats.mean
+
+##### SOURCE END #####
+--></body></html>

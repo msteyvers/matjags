@@ -1,0 +1,230 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>Example script: running MCMC chains serially</title><meta name="generator" content="MATLAB 7.13"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2011-10-31"><meta name="DC.source" content="Example1.m"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head><body><div class="content"><h1>Example script: running MCMC chains serially</h1><!--introduction--><p>This example illustrates how to call JAGS and run a number of MCMC chains serially</p><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#1">Model definition</a></li><li><a href="#2">Defining some MCMC parameters for JAGS</a></li><li><a href="#3">Defining observed data</a></li><li><a href="#4">Set initial values for latent variable in each chain</a></li><li><a href="#5">Calling JAGS to sample</a></li><li><a href="#6">Analyze samples produced by JAGS</a></li><li><a href="#7">Analyze summary statistics</a></li><li><a href="#8">Analyze the Rhat value</a></li></ul></div><h2>Model definition<a name="1"></a></h2><p>The BUGS example was taken from the WinBUGS course developed by Michael Lee and Eric-Jan Wagenmakers at <a href="http://www.ejwagenmakers.com/BayesCourse/BayesBook.html">http://www.ejwagenmakers.com/BayesCourse/BayesBook.html</a></p><p>In this example, the goal is to infer a rate with the following model:</p><p>
+<table border=0><tr><td>
+model {<br>
+&nbsp;&nbsp;  # Prior on Rate<br>
+&nbsp;&nbsp;  theta ~ dbeta(1,1)<br>
+&nbsp;&nbsp;  # Observed Counts<br>
+&nbsp;&nbsp;  k ~ dbin(theta,n)<br>
+}<br>
+</td><td>
+</table>
+</p><p>This script is stored in the text file "Rate_1.txt" The data is initialized in Matlab with variables k (number of successes) and n (total number of observations). In the rate problem, the goal is to get samples of theta, the rate of Beta prior for the binomial distribution.</p><pre class="codeinput">clear;
+clc
+</pre><h2>Defining some MCMC parameters for JAGS<a name="2"></a></h2><pre class="codeinput">nchains  = 7; <span class="comment">% How Many Chains?</span>
+nburnin  = 1000; <span class="comment">% How Many Burn-in Samples?</span>
+nsamples = 5000;  <span class="comment">% How Many Recorded Samples?</span>
+</pre><h2>Defining observed data<a name="3"></a></h2><pre class="codeinput">k=8;  <span class="comment">% number of observed successes</span>
+n=10; <span class="comment">% number of observations total</span>
+
+<span class="comment">% Create a single structure that has the data for all observed JAGS nodes</span>
+datastruct = struct(<span class="string">'k'</span>,k,<span class="string">'n'</span>,n);
+</pre><h2>Set initial values for latent variable in each chain<a name="4"></a></h2><pre class="codeinput"><span class="keyword">for</span> i=1:nchains
+    S.theta = 0.5; <span class="comment">% An Initial Value for the Success Rate</span>
+    init0(i) = S; <span class="comment">% init0 is a structure array that has the initial values for all latent variables for each chain</span>
+<span class="keyword">end</span>
+</pre><h2>Calling JAGS to sample<a name="5"></a></h2><pre class="codeinput">doparallel = 0; <span class="comment">% do not use parallelization</span>
+fprintf( <span class="string">'Running JAGS...\n'</span> );
+tic
+[samples, stats, structArray] = matjags( <span class="keyword">...</span>
+    datastruct, <span class="keyword">...</span><span class="comment">                     % Observed data</span>
+    fullfile(pwd, <span class="string">'Rate_1.txt'</span>), <span class="keyword">...</span><span class="comment">    % File that contains model definition</span>
+    init0, <span class="keyword">...</span><span class="comment">                          % Initial values for latent variables</span>
+    <span class="string">'doparallel'</span> , doparallel, <span class="keyword">...</span><span class="comment">      % Parallelization flag</span>
+    <span class="string">'nchains'</span>, nchains,<span class="keyword">...</span><span class="comment">              % Number of MCMC chains</span>
+    <span class="string">'nburnin'</span>, nburnin,<span class="keyword">...</span><span class="comment">              % Number of burnin steps</span>
+    <span class="string">'nsamples'</span>, nsamples, <span class="keyword">...</span><span class="comment">           % Number of samples to extract</span>
+    <span class="string">'thin'</span>, 1, <span class="keyword">...</span><span class="comment">                      % Thinning parameter</span>
+    <span class="string">'monitorparams'</span>, {<span class="string">'theta'</span>}, <span class="keyword">...</span><span class="comment">     % List of latent variables to monitor</span>
+    <span class="string">'savejagsoutput'</span> , 1 , <span class="keyword">...</span><span class="comment">          % Save command line output produced by JAGS?</span>
+    <span class="string">'verbosity'</span> , 1 , <span class="keyword">...</span><span class="comment">               % 0=do not produce any output; 1=minimal text output; 2=maximum text output</span>
+    <span class="string">'cleanup'</span> , 0 );                    <span class="comment">% clean up of temporary files?</span>
+toc
+</pre><pre class="codeoutput">Running JAGS...
+Running chain 1 (serial execution)
+Running chain 2 (serial execution)
+Running chain 3 (serial execution)
+Running chain 4 (serial execution)
+Running chain 5 (serial execution)
+Running chain 6 (serial execution)
+Running chain 7 (serial execution)
+Elapsed time is 1.194214 seconds.
+</pre><h2>Analyze samples produced by JAGS<a name="6"></a></h2><p><tt>samples.theta</tt> contains a matrix of samples where each row corresponds to the samples from a single MCMC chain</p><pre class="codeinput">figure(1);clf;hold <span class="string">on</span>;
+eps=.01;bins=[eps:eps:1-eps];
+count=hist(samples.theta,bins);
+count=count/sum(count)/eps;
+ph=plot(bins,count,<span class="string">'k-'</span>);
+set(gca,<span class="string">'box'</span>,<span class="string">'on'</span>,<span class="string">'fontsize'</span>,14);
+xlabel(<span class="string">'Rate'</span>,<span class="string">'fontsize'</span>,16);
+ylabel(<span class="string">'Posterior Density'</span>,<span class="string">'fontsize'</span>,16);
+</pre><img vspace="5" hspace="5" src="Example1_01.png" alt=""> <h2>Analyze summary statistics<a name="7"></a></h2><p><tt>stats.mean</tt> and <tt>stats.std</tt> contain the mean and standard deviation of the posterior distribution for each latent variable that was monitored. For example, we can read out the mean and std of theta:</p><pre class="codeinput">stats.mean.theta
+stats.std.theta
+</pre><pre class="codeoutput">
+ans =
+
+    0.7496
+
+
+ans =
+
+    0.1207
+
+</pre><h2>Analyze the Rhat value<a name="8"></a></h2><pre class="codeinput">stats.Rhat.theta
+</pre><pre class="codeoutput">
+ans =
+
+    1.0000
+
+</pre><p class="footer"><br>
+      Published with MATLAB&reg; 7.13<br></p></div><!--
+##### SOURCE BEGIN #####
+%% Example script: running MCMC chains serially
+% This example illustrates how to call JAGS and run a number of MCMC chains serially
+%
+%%% Model definition
+% The BUGS example was taken from the WinBUGS course developed by Michael Lee and Eric-Jan
+% Wagenmakers at <http://www.ejwagenmakers.com/BayesCourse/BayesBook.html>
+%
+% In this example, the goal is to infer a rate with the following model: 
+%
+% <html>
+% <table border=0><tr><td>
+% model {<br>
+% &nbsp;&nbsp;  # Prior on Rate<br>
+% &nbsp;&nbsp;  theta ~ dbeta(1,1)<br>
+% &nbsp;&nbsp;  # Observed Counts<br>
+% &nbsp;&nbsp;  k ~ dbin(theta,n)<br>
+% }<br>
+% </td><td>
+% </table>
+% </html>
+%
+% This script is stored in the text file "Rate_1.txt"
+% The data is initialized in Matlab with variables k (number of successes) and n (total number of observations). In the rate problem, the
+% goal is to get samples of theta, the rate of Beta prior for the binomial distribution. 
+
+clear;
+clc
+
+%% Defining some MCMC parameters for JAGS
+nchains  = 7; % How Many Chains?
+nburnin  = 1000; % How Many Burn-in Samples?
+nsamples = 5000;  % How Many Recorded Samples?
+
+%% Defining observed data
+k=8;  % number of observed successes
+n=10; % number of observations total
+
+% Create a single structure that has the data for all observed JAGS nodes
+datastruct = struct('k',k,'n',n);
+
+%% Set initial values for latent variable in each chain
+for i=1:nchains
+    S.theta = 0.5; % An Initial Value for the Success Rate
+    init0(i) = S; % init0 is a structure array that has the initial values for all latent variables for each chain
+end
+
+%% Calling JAGS to sample
+doparallel = 0; % do not use parallelization
+fprintf( 'Running JAGS...\n' );
+tic
+[samples, stats, structArray] = matjags( ...
+    datastruct, ...                     % Observed data   
+    fullfile(pwd, 'Rate_1.txt'), ...    % File that contains model definition
+    init0, ...                          % Initial values for latent variables
+    'doparallel' , doparallel, ...      % Parallelization flag
+    'nchains', nchains,...              % Number of MCMC chains
+    'nburnin', nburnin,...              % Number of burnin steps
+    'nsamples', nsamples, ...           % Number of samples to extract
+    'thin', 1, ...                      % Thinning parameter
+    'monitorparams', {'theta'}, ...     % List of latent variables to monitor
+    'savejagsoutput' , 1 , ...          % Save command line output produced by JAGS?
+    'verbosity' , 1 , ...               % 0=do not produce any output; 1=minimal text output; 2=maximum text output
+    'cleanup' , 0 );                    % clean up of temporary files?
+toc
+    
+%% Analyze samples produced by JAGS
+% |samples.theta| contains a matrix of samples where each row corresponds to the samples from a single MCMC chain
+figure(1);clf;hold on;
+eps=.01;bins=[eps:eps:1-eps];
+count=hist(samples.theta,bins);
+count=count/sum(count)/eps;
+ph=plot(bins,count,'k-');
+set(gca,'box','on','fontsize',14);
+xlabel('Rate','fontsize',16);
+ylabel('Posterior Density','fontsize',16);
+
+%% Analyze summary statistics
+% |stats.mean| and |stats.std| contain the mean and standard deviation of the posterior distribution for each latent variable that 
+% was monitored. For example, we can read out the mean and std of theta:
+stats.mean.theta
+stats.std.theta
+
+%% Analyze the Rhat value
+stats.Rhat.theta
+
+##### SOURCE END #####
+--></body></html>
