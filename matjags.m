@@ -134,7 +134,6 @@ jagsModel = [ jagsModelBase modelextension ];
 % get the current directory
 curdir = pwd;
 cd( whdir );
-%[status,result] = dos( 'dir' )
 
 % Does the temporary directory exist? If not, create it
 if ~exist( workingDir , 'dir' )
@@ -630,68 +629,6 @@ for fi=1:length(fld)
     stats.ci_low = setfield(stats.ci_low, fname, squeeze(ci_samples_overall_low));
     stats.ci_high = setfield(stats.ci_high, fname, squeeze(ci_samples_overall_high));
 end
-end
-
-
-%%%%%%%%%%%%
-% Andrew Jackson - function getDICstats added a.jackson@tcd.ie
-% Used to retrieve the DIC statistics from the log file
-% if matbugs input DICstatus = 1
-% This code is probably a bit clunky but it does the job.
-% Note that the values read from the log file have 3 decimal places but
-% matlab decides to give them 4 - with a zero tagged on the end. The
-% precision is obviously only to 3 decimal places. sscanf.m does not seem
-% to recognise the field-width and precision codes that sprintf.m does.
-function DICstats = getDICstats(workingDir)
-DICstats = [];
-FIDlog = fopen([workingDir '\log.txt'],'r');
-ct = 0;
-test = 0;
-endloop = 0;
-while 1
-    
-    tline = fgets(FIDlog);
-    
-    if tline == -1; break; end
-    if endloop; break; end
-    
-    if strfind(tline,'dic.set cannot be executed');
-        DICstats.error = 'DIC monitor could not be set by WinBUGS';
-    end
-    
-    if size(tline,2)>6
-        % The string 'total' in the log file denotes the end of the DIC
-        % stats so the loop can be ended in the next iteration.
-        if strcmp(tline(1:5),'total'); endloop = 1; end;
-    end
-    
-    if size(tline,2)>2
-        % locate the DIC string identifier in the log file
-        if strcmp(tline(1:3),'DIC'); test = 1; end
-    end
-    
-    if test
-        ct=ct+1;
-        % DIC results are located 3 lines after the DIC string identifier
-        % in the log file.
-        if ct >= 4
-            A = sscanf(tline,'%*s %f %f %f %f');
-            S = sscanf(tline, '%s %*f %*f %*f %*f');
-            % Cheng-Ta, Yang suggested this change
-            %DICstats = setfield(DICstats,S,'Dbar',A(1));
-            %%DICstats = setfield(DICstats,S,'Dhat',A(2));
-            %DICstats = setfield(DICstats,S,'pD',A(3));
-            %DICstats = setfield(DICstats,S,'DIC',A(4));
-            DICstats.S.Dbar = A(1);
-            DICstats.S.Dhat = A(2);
-            DICstats.S.pD = A(3);
-            DICstats.S.DIC = A(4);
-            DICstats.S.Dhat = A(2);
-        end
-    end
-end
-
-fclose(FIDlog)
 end
 
 %%%%%%%%%%%%
