@@ -128,33 +128,17 @@ if length( initStructs ) ~= nChains
     error( 'Number of structures with initial values should match number of chains' );
 end
 
-[ whdir , jagsModelBase , modelextension ] = fileparts( jagsFilenm );
-jagsModel = [ jagsModelBase modelextension ];
-
-% get the current directory
-curdir = pwd;
-cd( whdir );
-
-% Does the temporary directory exist? If not, create it
-if ~exist( workingDir , 'dir' )
-    [SUCCESS,MESSAGE,MESSAGEID] = mkdir(workingDir);
-    if SUCCESS == 0
-        error( MESSAGE );
-    end
-end
-
-cd( workingDir );
+[modelFullPath, workingDirFullPath] = get_model_and_working_directory_paths(jagsFilenm, workingDir);
 
 % Do we want to cleanup files before we start?
 if cleanup==1
-    delete( 'CODA*' );
-    delete( 'jag*' );
+    delete( fullfile(workingDirFullPath, 'CODA*') );
+    delete( fullfile(workingDirFullPath, 'jag*') );
 end
 
 % Create the data file
-jagsData = 'jagsdata.R';
-dataGenjags(dataStruct, jagsData , '', dotranspose );
-
+jagsDataFullPath = fullfile(workingDirFullPath, 'jagsdata.R');
+dataGenjags(dataStruct, jagsDataFullPath , '', dotranspose );
 
 nmonitor = length( monitorParams );
 if nmonitor == 0
@@ -163,32 +147,25 @@ end
 
 % Develop a separate JAGS script for each chain
 for whchain=1:nChains
-    jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
-    codastem     = sprintf( 'CODA%d' , whchain );
-    InitData     = sprintf( 'jagsinit%d.R' , whchain );
+    codastemFullPath     = fullfile(workingDirFullPath, sprintf( 'CODA%d' , whchain ));
+    InitDataFullPath     = fullfile(workingDirFullPath, sprintf( 'jagsinit%d.R' , whchain ));
     
     % Create the jags script for this chain
-    [ fid , message ] = fopen( jagsScript , 'wt' );
+    jagsScriptFullPath   = fullfile(workingDirFullPath, sprintf( 'jagscript%d.cmd' , whchain ));
+    [ fid , message ] = fopen( jagsScriptFullPath , 'wt' );
     if fid == -1
         error( message );
     end
     
-    %fprintf( fid , 'model in "..%s%s"\n' , filesep , jagsModel' );
     if dodic
         fprintf( fid , 'load dic\n' );
     end
-        
-    if ~isempty(whdir) && (strcmp(whdir(1),filesep) || (length(whdir) > 2 && whdir(2) == ':'))
-        % Case when a full path string is specified for the jagsModel
-        fprintf( fid , 'model in "%s"\n' , fullfile(whdir , jagsModel));
-    else
-        % Case when a relative path string is specified for the jagsModel
-        fprintf( fid , 'model in "%s"\n' , fullfile(curdir , whdir, jagsModel));
-    end
     
-    fprintf( fid , 'data in %s\n' , jagsData' );
+    fprintf( fid , 'model in "%s"\n' , modelFullPath);
+    
+    fprintf( fid , 'data in "%s"\n' , jagsDataFullPath );
     fprintf( fid , 'compile, nchains(1)\n' );
-    fprintf( fid , 'parameters in %s\n' , InitData );
+    fprintf( fid , 'parameters in "%s"\n' , InitDataFullPath );
     fprintf( fid , 'initialize\n' );
     fprintf( fid , 'update %d\n' , nBurnin );
     for j=1:nmonitor
@@ -200,13 +177,13 @@ for whchain=1:nChains
         %fprintf( fid , 'monitor pD\n' );
     end
     fprintf( fid , 'update %d\n' , nSamples * thin );
-    fprintf( fid , 'coda *, stem(''%s'')\n' , codastem );
+    fprintf( fid , 'coda *, stem(''%s'')\n' , codastemFullPath );
     fclose( fid );
     
     % Create the init file
     addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
         sprintf( '".RNG.seed" <- %d' , whchain ) };
-    dataGenjags( initStructs, InitData , addlines, dotranspose );
+    dataGenjags( initStructs, InitDataFullPath , addlines, dotranspose );
 end
 
 % Do we use the Matlab parallel computing toolbox?
@@ -222,7 +199,7 @@ if doParallel==1
         if verbosity > 0
             fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
         end
-        jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
+        jagsScript   = fullfile(workingDirFullPath, sprintf( 'jagscript%d.cmd' , whchain ));
         [status{ whchain },result{whchain}] = run_jags_script(jagsScript); 
     end
 else % Run each chain serially
@@ -232,7 +209,7 @@ else % Run each chain serially
         if verbosity > 0
             fprintf( 'Running chain %d (serial execution)\n' , whchain );
         end
-        jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
+        jagsScript   = fullfile(workingDirFullPath, sprintf( 'jagscript%d.cmd' , whchain ));
         [status{ whchain },result{whchain}] = run_jags_script(jagsScript);
     end
 end
@@ -240,8 +217,8 @@ end
 % Save the output from JAGS to a text file?
 if savejagsoutput==1
     for whchain=1:nChains
-        filenm = sprintf( 'jagoutput%d.txt' , whchain );
-        [ fid , message ] = fopen( filenm , 'wt' );
+        filenmFullPath = fullfile(workingDirFullPath, sprintf( 'jagoutput%d.txt' , whchain ));
+        [ fid , message ] = fopen( filenmFullPath , 'wt' );
         if fid == -1
             error( message );
         end
@@ -257,7 +234,6 @@ for whchain=1:nChains
     resultnow = result{whchain};
     statusnow = status{ whchain };
     if status{whchain} > 0
-        cd( curdir );
         error( [ 'Error from system environment: ' resultnow ] );
     end
     
@@ -265,7 +241,6 @@ for whchain=1:nChains
     pattern = [ 'can''t|RUNTIME ERROR|syntax error|failed' ];
     errstr = regexpi( resultnow , pattern , 'match' );
     if ~isempty( errstr )
-        cd( curdir );
         fprintf( 'Error encountered in jags (chain %d). Check output from JAGS below:\n' , whchain  );
         fprintf( 'JAGS output for chain %d\n%s\n' , whchain , resultnow );
         error( 'Stopping execution because of jags error' );
@@ -291,18 +266,17 @@ for whchain=1:nChains
 end
 
 %% Extract information from the output files so we can pass it back to Matlab
-codaIndex = 'CODA1index.txt'; % the index files are identical across chains, just pick first one
+% the index files are identical across chains, just pick first one
+codaIndexFullPath = fullfile(workingDirFullPath, 'CODA1index.txt');
 for i=1:nChains
-    codaF = [ 'CODA' , num2str(i) , 'chain1.txt' ];
+    codaFFullPath = fullfile(workingDirFullPath, [ 'CODA' , num2str(i) , 'chain1.txt' ]);
     
-    S = bugs2mat(codaIndex, codaF);
+    S = bugs2mat(codaIndexFullPath, codaFFullPath);
     structArray(i) = S;
 end
 samples = structsToArrays(structArray);
 stats = computeStats(samples,doboot);
 
-
-cd( curdir );
 
 %% DIC calculation
 if dodic
@@ -348,6 +322,38 @@ function result = is_jags_directory(directory)
         jags = fullfile(directory, 'jags');
     end
     result = exist(jags, 'file');
+end
+
+function [modelFullPath, workingDirFullPath] = get_model_and_working_directory_paths(jagsFilenm, workingDir)
+    % get the current directory
+    curdir = pwd;
+
+    [ whdir , jagsModelBase , modelextension ] = fileparts( jagsFilenm );
+    jagsModel = [ jagsModelBase modelextension ];
+
+    cd( whdir );
+
+    if ~isempty(whdir) && (strcmp(whdir(1),filesep) || (length(whdir) > 2 && whdir(2) == ':'))
+        % Case when a full path string is specified for the jagsModel
+        modelFullPath = fullfile(whdir , jagsModel);
+    else
+        % Case when a relative path string is specified for the jagsModel
+        modelFullPath = fullfile(curdir, whdir, jagsModel);
+    end
+
+    % Does the temporary directory exist? If not, create it
+    if ~exist( workingDir , 'dir' )
+        [SUCCESS,MESSAGE,MESSAGEID] = mkdir(workingDir);
+        if SUCCESS == 0
+            error( MESSAGE );
+        end
+    end
+
+    cd( workingDir );
+
+    workingDirFullPath = pwd();
+
+    cd(curdir);
 end
 
 function dataGenjags(dataStruct, fileName, addlines, dotranspose )
