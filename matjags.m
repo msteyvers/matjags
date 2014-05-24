@@ -1,4 +1,4 @@
-function [samples, stats, structArray] = matjags(dataStruct, jagsFilenm, initStructs , varargin)
+function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStructs , varargin)
 % MATJAGS, a Matlab interface for JAGS
 % Version 1.3.1. Tested on JAGS 3.3.0, Windows 64-bit version
 %
@@ -8,7 +8,7 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsFilenm, initStr
 %
 % INPUT:
 % dataStruct contains values of observed variables.
-% jagsFilenm is the name of the model file
+% jagsModel is the name of the model file or a string that contains a jags model
 % initStructs contains initial values for the latent variables (unlike
 % matbugs, this is a required variable)
 
@@ -128,7 +128,18 @@ if length( initStructs ) ~= nChains
     error( 'Number of structures with initial values should match number of chains' );
 end
 
-[modelFullPath, workingDirFullPath] = get_model_and_working_directory_paths(jagsFilenm, workingDir);
+if is_modelstring(jagsModel)
+    workingDirFullPath = get_working_directory(workingDir);
+    modelFullPath = fullfile(workingDirFullPath, 'jags_model.jags');
+    fid = fopen(modelFullPath, 'w');
+    if fid == -1
+        error(['Cannot write model to "', modelFullPath, '"' ]);
+    end
+    fprintf(fid, '%s', jagsModel);
+    fclose(fid);
+else
+    [modelFullPath, workingDirFullPath] = get_model_and_working_directory_paths(jagsModel, workingDir);
+end
 
 % Do we want to cleanup files before we start?
 if cleanup==1
@@ -286,9 +297,19 @@ if dodic
     stats.dic = pd + dbar;
 end
 
+if isWorkDirTemporary
+    delete(fullfile(workingDirFullPath, 'jag*'));
+    delete(fullfile(workingDirFullPath, 'CODA*'));
+    rmdir(workingDirFullPath);
+end
+
 end
 
 %% ----- nested functions -----------------
+
+function result = is_modelstring(string)
+    result = ~isempty(regexp(string, '^\s*model\s*\{'));
+end
 
 function [status, result] = run_jags_script(jagsScript)
     if ispc
@@ -322,6 +343,20 @@ function result = is_jags_directory(directory)
         jags = fullfile(directory, 'jags');
     end
     result = exist(jags, 'file');
+end
+
+function workingDirFullPath = get_working_directory(workingDir)
+    curdir = pwd;
+    % Does the temporary directory exist? If not, create it
+    if ~exist( workingDir , 'dir' )
+        [SUCCESS,MESSAGE,MESSAGEID] = mkdir(workingDir);
+        if SUCCESS == 0
+            error( MESSAGE );
+        end
+    end
+    cd(workingDir);
+    workingDirFullPath = pwd();
+    cd(curdir);
 end
 
 function [modelFullPath, workingDirFullPath] = get_model_and_working_directory_paths(jagsFilenm, workingDir)
