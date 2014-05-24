@@ -99,11 +99,7 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 % * Changed the default working directory for JAGS to make it platform
 % independent
 
-if ispc
-    defaultworkingDir = 'c:\temp\jagstmp'; % change this to fit your particular needs
-elseif ismac | isunix
-    defaultworkingDir = [ '..' filesep 'jagstmp' ]; % change this to fit your particular needs
-end
+defaultworkingDir = tempname;
 
 % Get the parameters
 [ nChains, workingDir, nBurnin, nSamples, ...
@@ -123,6 +119,8 @@ end
     'cleanup' , 0, ...
     'showwarnings' , 0 , ...
     'dotranspose' , 0 );
+
+isWorkDirTemporary = strcmp(defaultworkingDir, workingDir) && ~exist(workingDir, 'file');
 
 if length( initStructs ) ~= nChains
     error( 'Number of structures with initial values should match number of chains' );
