@@ -218,42 +218,22 @@ if doParallel==1
     
     status = cell( 1,nChains );
     result = cell( 1,nChains );
-    if ispc
-        parfor whchain=1:nChains
-            jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
-            cmd = sprintf( 'jags %s' , jagsScript );
-            if verbosity > 0
-                fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
-            end
-            [status{ whchain },result{whchain}] = dos( cmd );
+    parfor whchain=1:nChains
+        if verbosity > 0
+            fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
         end
-    elseif ismac | isunix
-        parfor whchain=1:nChains
-            jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
-            jagsPrefix = sprintf('/usr/local/bin/');
-            cmd = sprintf( '%sjags %s' ,jagsPrefix, jagsScript );
-            if verbosity > 0
-                fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
-            end
-            [status{ whchain },result{whchain}] = dos( cmd );
-        end
+        jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
+        [status{ whchain },result{whchain}] = run_jags_script(jagsScript); 
     end
-    
 else % Run each chain serially
     status = cell( 1,nChains );
     result = cell( 1,nChains );
     for whchain=1:nChains
-        jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
-        if ispc
-            cmd = sprintf( 'jags %s' , jagsScript );
-        elseif ismac | isunix
-            jagsPrefix = sprintf('/usr/local/bin/');
-            cmd = sprintf( '%sjags %s' ,jagsPrefix, jagsScript );
-        end
         if verbosity > 0
             fprintf( 'Running chain %d (serial execution)\n' , whchain );
         end
-        [status{ whchain },result{whchain}] = dos( cmd );
+        jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
+        [status{ whchain },result{whchain}] = run_jags_script(jagsScript);
     end
 end
 
@@ -278,7 +258,7 @@ for whchain=1:nChains
     statusnow = status{ whchain };
     if status{whchain} > 0
         cd( curdir );
-        error( [ 'Error from dos environment: ' resultnow ] );
+        error( [ 'Error from system environment: ' resultnow ] );
     end
     
     % Do we get an error message anywhere from JAGS --> produce an error
@@ -335,6 +315,41 @@ end
 end
 
 %% ----- nested functions -----------------
+
+function [status, result] = run_jags_script(jagsScript)
+    if ispc
+        jagsPath = 'jags';
+    else
+        possibleDirectories = {'/usr/local/bin/', '/usr/bin/'};
+        jagsPath = get_jags_path_from_possible_directories(possibleDirectories);
+    end
+    cmd = sprintf('%s %s', jagsPath, jagsScript);
+    if ispc()
+        [status, result] = dos( cmd );
+    else
+        [status, result] = unix( cmd );
+    end
+end
+
+function path = get_jags_path_from_possible_directories(possibleDirectories)
+    for i=1:length(possibleDirectories)
+        if is_jags_directory(possibleDirectories{i})
+            path = fullfile(possibleDirectories{i}, 'jags');
+            return
+        end
+    end
+    path = 'jags';
+end
+
+function result = is_jags_directory(directory)
+    if ispc()
+        jags = fullfile(directory, 'jags.bat');
+    else
+        jags = fullfile(directory, 'jags');
+    end
+    result = exist(jags, 'file');
+end
+
 function dataGenjags(dataStruct, fileName, addlines, dotranspose )
 % This is a helper function to generate data or init files for JAGS
 % Inputs:
