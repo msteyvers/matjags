@@ -1,4 +1,4 @@
-function [samples, stats, structArray] = matjags(dataStruct, jagsFilenm, initStructs , varargin)
+function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStructs , varargin)
 % MATJAGS, a Matlab interface for JAGS
 % Version 1.3.1. Tested on JAGS 3.3.0, Windows 64-bit version
 %
@@ -8,7 +8,7 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsFilenm, initStr
 %
 % INPUT:
 % dataStruct contains values of observed variables.
-% jagsFilenm is the name of the model file
+% jagsModel is the name of the model file or a string that contains a jags model
 % initStructs contains initial values for the latent variables (unlike
 % matbugs, this is a required variable)
 
@@ -99,11 +99,7 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsFilenm, initStr
 % * Changed the default working directory for JAGS to make it platform
 % independent
 
-if ispc
-    defaultworkingDir = 'c:\temp\jagstmp'; % change this to fit your particular needs
-elseif ismac | isunix
-    defaultworkingDir = [ '..' filesep 'jagstmp' ]; % change this to fit your particular needs
-end
+defaultworkingDir = tempname;
 
 % Get the parameters
 [ nChains, workingDir, nBurnin, nSamples, ...
@@ -124,38 +120,34 @@ end
     'showwarnings' , 0 , ...
     'dotranspose' , 0 );
 
+isWorkDirTemporary = strcmp(defaultworkingDir, workingDir) && ~exist(workingDir, 'file');
+
 if length( initStructs ) ~= nChains
     error( 'Number of structures with initial values should match number of chains' );
 end
 
-[ whdir , jagsModelBase , modelextension ] = fileparts( jagsFilenm );
-jagsModel = [ jagsModelBase modelextension ];
-
-% get the current directory
-curdir = pwd;
-cd( whdir );
-%[status,result] = dos( 'dir' )
-
-% Does the temporary directory exist? If not, create it
-if ~exist( workingDir , 'dir' )
-    [SUCCESS,MESSAGE,MESSAGEID] = mkdir(workingDir);
-    if SUCCESS == 0
-        error( MESSAGE );
+if is_modelstring(jagsModel)
+    workingDirFullPath = get_working_directory(workingDir);
+    modelFullPath = fullfile(workingDirFullPath, 'jags_model.jags');
+    fid = fopen(modelFullPath, 'w');
+    if fid == -1
+        error(['Cannot write model to "', modelFullPath, '"' ]);
     end
+    fprintf(fid, '%s', jagsModel);
+    fclose(fid);
+else
+    [modelFullPath, workingDirFullPath] = get_model_and_working_directory_paths(jagsModel, workingDir);
 end
-
-cd( workingDir );
 
 % Do we want to cleanup files before we start?
 if cleanup==1
-    delete( 'CODA*' );
-    delete( 'jag*' );
+    delete( fullfile(workingDirFullPath, 'CODA*') );
+    delete( fullfile(workingDirFullPath, 'jag*') );
 end
 
 % Create the data file
-jagsData = 'jagsdata.R';
-dataGenjags(dataStruct, jagsData , '', dotranspose );
-
+jagsDataFullPath = fullfile(workingDirFullPath, 'jagsdata.R');
+dataGenjags(dataStruct, jagsDataFullPath , '', dotranspose );
 
 nmonitor = length( monitorParams );
 if nmonitor == 0
@@ -164,32 +156,25 @@ end
 
 % Develop a separate JAGS script for each chain
 for whchain=1:nChains
-    jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
-    codastem     = sprintf( 'CODA%d' , whchain );
-    InitData     = sprintf( 'jagsinit%d.R' , whchain );
+    codastemFullPath     = fullfile(workingDirFullPath, sprintf( 'CODA%d' , whchain ));
+    InitDataFullPath     = fullfile(workingDirFullPath, sprintf( 'jagsinit%d.R' , whchain ));
     
     % Create the jags script for this chain
-    [ fid , message ] = fopen( jagsScript , 'wt' );
+    jagsScriptFullPath   = fullfile(workingDirFullPath, sprintf( 'jagscript%d.cmd' , whchain ));
+    [ fid , message ] = fopen( jagsScriptFullPath , 'wt' );
     if fid == -1
         error( message );
     end
     
-    %fprintf( fid , 'model in "..%s%s"\n' , filesep , jagsModel' );
     if dodic
         fprintf( fid , 'load dic\n' );
     end
-        
-    if ~isempty(whdir) && (strcmp(whdir(1),filesep) || (length(whdir) > 2 && whdir(2) == ':'))
-        % Case when a full path string is specified for the jagsModel
-        fprintf( fid , 'model in "%s"\n' , fullfile(whdir , jagsModel));
-    else
-        % Case when a relative path string is specified for the jagsModel
-        fprintf( fid , 'model in "%s"\n' , fullfile(curdir , whdir, jagsModel));
-    end
     
-    fprintf( fid , 'data in %s\n' , jagsData' );
+    fprintf( fid , 'model in "%s"\n' , modelFullPath);
+    
+    fprintf( fid , 'data in "%s"\n' , jagsDataFullPath );
     fprintf( fid , 'compile, nchains(1)\n' );
-    fprintf( fid , 'parameters in %s\n' , InitData );
+    fprintf( fid , 'parameters in "%s"\n' , InitDataFullPath );
     fprintf( fid , 'initialize\n' );
     fprintf( fid , 'update %d\n' , nBurnin );
     for j=1:nmonitor
@@ -201,13 +186,13 @@ for whchain=1:nChains
         %fprintf( fid , 'monitor pD\n' );
     end
     fprintf( fid , 'update %d\n' , nSamples * thin );
-    fprintf( fid , 'coda *, stem(''%s'')\n' , codastem );
+    fprintf( fid , 'coda *, stem(''%s'')\n' , codastemFullPath );
     fclose( fid );
     
     % Create the init file
     addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
         sprintf( '".RNG.seed" <- %d' , whchain ) };
-    dataGenjags( initStructs, InitData , addlines, dotranspose );
+    dataGenjags( initStructs, InitDataFullPath , addlines, dotranspose );
 end
 
 % Do we use the Matlab parallel computing toolbox?
@@ -219,50 +204,30 @@ if doParallel==1
     
     status = cell( 1,nChains );
     result = cell( 1,nChains );
-    if ispc
-        parfor whchain=1:nChains
-            jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
-            cmd = sprintf( 'jags %s' , jagsScript );
-            if verbosity > 0
-                fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
-            end
-            [status{ whchain },result{whchain}] = dos( cmd );
+    parfor whchain=1:nChains
+        if verbosity > 0
+            fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
         end
-    elseif ismac | isunix
-        parfor whchain=1:nChains
-            jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
-            jagsPrefix = sprintf('/usr/local/bin/');
-            cmd = sprintf( '%sjags %s' ,jagsPrefix, jagsScript );
-            if verbosity > 0
-                fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
-            end
-            [status{ whchain },result{whchain}] = dos( cmd );
-        end
+        jagsScript   = fullfile(workingDirFullPath, sprintf( 'jagscript%d.cmd' , whchain ));
+        [status{ whchain },result{whchain}] = run_jags_script(jagsScript); 
     end
-    
 else % Run each chain serially
     status = cell( 1,nChains );
     result = cell( 1,nChains );
     for whchain=1:nChains
-        jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
-        if ispc
-            cmd = sprintf( 'jags %s' , jagsScript );
-        elseif ismac | isunix
-            jagsPrefix = sprintf('/usr/local/bin/');
-            cmd = sprintf( '%sjags %s' ,jagsPrefix, jagsScript );
-        end
         if verbosity > 0
             fprintf( 'Running chain %d (serial execution)\n' , whchain );
         end
-        [status{ whchain },result{whchain}] = dos( cmd );
+        jagsScript   = fullfile(workingDirFullPath, sprintf( 'jagscript%d.cmd' , whchain ));
+        [status{ whchain },result{whchain}] = run_jags_script(jagsScript);
     end
 end
 
 % Save the output from JAGS to a text file?
 if savejagsoutput==1
     for whchain=1:nChains
-        filenm = sprintf( 'jagoutput%d.txt' , whchain );
-        [ fid , message ] = fopen( filenm , 'wt' );
+        filenmFullPath = fullfile(workingDirFullPath, sprintf( 'jagoutput%d.txt' , whchain ));
+        [ fid , message ] = fopen( filenmFullPath , 'wt' );
         if fid == -1
             error( message );
         end
@@ -278,15 +243,13 @@ for whchain=1:nChains
     resultnow = result{whchain};
     statusnow = status{ whchain };
     if status{whchain} > 0
-        cd( curdir );
-        error( [ 'Error from dos environment: ' resultnow ] );
+        error( [ 'Error from system environment: ' resultnow ] );
     end
     
     % Do we get an error message anywhere from JAGS --> produce an error
     pattern = [ 'can''t|RUNTIME ERROR|syntax error|failed' ];
     errstr = regexpi( resultnow , pattern , 'match' );
     if ~isempty( errstr )
-        cd( curdir );
         fprintf( 'Error encountered in jags (chain %d). Check output from JAGS below:\n' , whchain  );
         fprintf( 'JAGS output for chain %d\n%s\n' , whchain , resultnow );
         error( 'Stopping execution because of jags error' );
@@ -312,18 +275,17 @@ for whchain=1:nChains
 end
 
 %% Extract information from the output files so we can pass it back to Matlab
-codaIndex = 'CODA1index.txt'; % the index files are identical across chains, just pick first one
+% the index files are identical across chains, just pick first one
+codaIndexFullPath = fullfile(workingDirFullPath, 'CODA1index.txt');
 for i=1:nChains
-    codaF = [ 'CODA' , num2str(i) , 'chain1.txt' ];
+    codaFFullPath = fullfile(workingDirFullPath, [ 'CODA' , num2str(i) , 'chain1.txt' ]);
     
-    S = bugs2mat(codaIndex, codaF);
+    S = bugs2mat(codaIndexFullPath, codaFFullPath);
     structArray(i) = S;
 end
 samples = structsToArrays(structArray);
 stats = computeStats(samples,doboot);
 
-
-cd( curdir );
 
 %% DIC calculation
 if dodic
@@ -333,9 +295,100 @@ if dodic
     stats.dic = pd + dbar;
 end
 
+if isWorkDirTemporary
+    delete(fullfile(workingDirFullPath, 'jag*'));
+    delete(fullfile(workingDirFullPath, 'CODA*'));
+    rmdir(workingDirFullPath);
+end
+
 end
 
 %% ----- nested functions -----------------
+
+function result = is_modelstring(string)
+    result = ~isempty(regexp(string, '^\s*model\s*\{'));
+end
+
+function [status, result] = run_jags_script(jagsScript)
+    if ispc
+        jagsPath = 'jags';
+    else
+        possibleDirectories = {'/usr/local/bin/', '/usr/bin/'};
+        jagsPath = get_jags_path_from_possible_directories(possibleDirectories);
+    end
+    cmd = sprintf('%s %s', jagsPath, jagsScript);
+    if ispc()
+        [status, result] = dos( cmd );
+    else
+        [status, result] = unix( cmd );
+    end
+end
+
+function path = get_jags_path_from_possible_directories(possibleDirectories)
+    for i=1:length(possibleDirectories)
+        if is_jags_directory(possibleDirectories{i})
+            path = fullfile(possibleDirectories{i}, 'jags');
+            return
+        end
+    end
+    path = 'jags';
+end
+
+function result = is_jags_directory(directory)
+    if ispc()
+        jags = fullfile(directory, 'jags.bat');
+    else
+        jags = fullfile(directory, 'jags');
+    end
+    result = exist(jags, 'file');
+end
+
+function workingDirFullPath = get_working_directory(workingDir)
+    curdir = pwd;
+    % Does the temporary directory exist? If not, create it
+    if ~exist( workingDir , 'dir' )
+        [SUCCESS,MESSAGE,MESSAGEID] = mkdir(workingDir);
+        if SUCCESS == 0
+            error( MESSAGE );
+        end
+    end
+    cd(workingDir);
+    workingDirFullPath = pwd();
+    cd(curdir);
+end
+
+function [modelFullPath, workingDirFullPath] = get_model_and_working_directory_paths(jagsFilenm, workingDir)
+    % get the current directory
+    curdir = pwd;
+
+    [ whdir , jagsModelBase , modelextension ] = fileparts( jagsFilenm );
+    jagsModel = [ jagsModelBase modelextension ];
+
+    cd( whdir );
+
+    if ~isempty(whdir) && (strcmp(whdir(1),filesep) || (length(whdir) > 2 && whdir(2) == ':'))
+        % Case when a full path string is specified for the jagsModel
+        modelFullPath = fullfile(whdir , jagsModel);
+    else
+        % Case when a relative path string is specified for the jagsModel
+        modelFullPath = fullfile(curdir, whdir, jagsModel);
+    end
+
+    % Does the temporary directory exist? If not, create it
+    if ~exist( workingDir , 'dir' )
+        [SUCCESS,MESSAGE,MESSAGEID] = mkdir(workingDir);
+        if SUCCESS == 0
+            error( MESSAGE );
+        end
+    end
+
+    cd( workingDir );
+
+    workingDirFullPath = pwd();
+
+    cd(curdir);
+end
+
 function dataGenjags(dataStruct, fileName, addlines, dotranspose )
 % This is a helper function to generate data or init files for JAGS
 % Inputs:
@@ -630,68 +683,6 @@ for fi=1:length(fld)
     stats.ci_low = setfield(stats.ci_low, fname, squeeze(ci_samples_overall_low));
     stats.ci_high = setfield(stats.ci_high, fname, squeeze(ci_samples_overall_high));
 end
-end
-
-
-%%%%%%%%%%%%
-% Andrew Jackson - function getDICstats added a.jackson@tcd.ie
-% Used to retrieve the DIC statistics from the log file
-% if matbugs input DICstatus = 1
-% This code is probably a bit clunky but it does the job.
-% Note that the values read from the log file have 3 decimal places but
-% matlab decides to give them 4 - with a zero tagged on the end. The
-% precision is obviously only to 3 decimal places. sscanf.m does not seem
-% to recognise the field-width and precision codes that sprintf.m does.
-function DICstats = getDICstats(workingDir)
-DICstats = [];
-FIDlog = fopen([workingDir '\log.txt'],'r');
-ct = 0;
-test = 0;
-endloop = 0;
-while 1
-    
-    tline = fgets(FIDlog);
-    
-    if tline == -1; break; end
-    if endloop; break; end
-    
-    if strfind(tline,'dic.set cannot be executed');
-        DICstats.error = 'DIC monitor could not be set by WinBUGS';
-    end
-    
-    if size(tline,2)>6
-        % The string 'total' in the log file denotes the end of the DIC
-        % stats so the loop can be ended in the next iteration.
-        if strcmp(tline(1:5),'total'); endloop = 1; end;
-    end
-    
-    if size(tline,2)>2
-        % locate the DIC string identifier in the log file
-        if strcmp(tline(1:3),'DIC'); test = 1; end
-    end
-    
-    if test
-        ct=ct+1;
-        % DIC results are located 3 lines after the DIC string identifier
-        % in the log file.
-        if ct >= 4
-            A = sscanf(tline,'%*s %f %f %f %f');
-            S = sscanf(tline, '%s %*f %*f %*f %*f');
-            % Cheng-Ta, Yang suggested this change
-            %DICstats = setfield(DICstats,S,'Dbar',A(1));
-            %%DICstats = setfield(DICstats,S,'Dhat',A(2));
-            %DICstats = setfield(DICstats,S,'pD',A(3));
-            %DICstats = setfield(DICstats,S,'DIC',A(4));
-            DICstats.S.Dbar = A(1);
-            DICstats.S.Dhat = A(2);
-            DICstats.S.pD = A(3);
-            DICstats.S.DIC = A(4);
-            DICstats.S.Dhat = A(2);
-        end
-    end
-end
-
-fclose(FIDlog)
 end
 
 %%%%%%%%%%%%
