@@ -32,6 +32,8 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 %    2 = maximum number of messages
 % 'cleanup' - 0/1 -- do we want to remove PREVIOUS temporary files?
 % 'dotranspose' - Set to 0 (default) if you want to insure compatibility with matbugs/WinBUGS
+% 'rndseed' - set to 1 to randomise seed for each MCMC chain. Default is
+% set to 0, for no randomisation of the seed.
 %
 % OUTPUT
 % S contains the samples; each field may have a different shape:
@@ -71,7 +73,8 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 %         'verbosity' , 1 , ...
 %         'cleanup' , 0 , ...
 %         'showwarnings' , 1 , ...
-%         'workingdir' , 'tmpjags' );
+%         'workingdir' , 'tmpjags',...
+%         'rndseed' , 0);
 %
 % For Windows users:
 % The JAGS executable should be placed in the windows path
@@ -102,8 +105,9 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 defaultworkingDir = tempname;
 
 % Get the parameters
-[ nChains, workingDir, nBurnin, nSamples, ...
-    monitorParams, thin, dodic, doParallel, savejagsoutput, verbosity, cleanup, showwarnings,dotranspose,doboot ] =  ...
+[ nChains, workingDir, nBurnin, nSamples, monitorParams, thin, dodic,...
+    doParallel, savejagsoutput, verbosity, cleanup, showwarnings,...
+    dotranspose, rndseed, doboot ] =  ...
     process_options(...
     varargin, ...
     'nChains', 1, ...
@@ -118,7 +122,8 @@ defaultworkingDir = tempname;
     'verbosity' , 0,...
     'cleanup' , 0, ...
     'showwarnings' , 0 , ...
-    'dotranspose' , 0 );
+    'dotranspose' , 0 , ...
+    'rndseed',0);
 
 isWorkDirTemporary = strcmp(defaultworkingDir, workingDir) && ~exist(workingDir, 'file');
 
@@ -190,8 +195,21 @@ for whchain=1:nChains
     fclose( fid );
     
     % Create the init file
-    addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
-        sprintf( '".RNG.seed" <- %d' , whchain ) };
+    switch rndseed
+        case{0}
+            addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
+                sprintf( '".RNG.seed" <- %d' , whchain ) };
+        case{1}
+            % The 'randi' command below will pick a random seed. The seed
+            % for each chain will definititly be different as the chain
+            % number is added to this seed value. Remember that this randi
+            % command is itself subject to the seed within Matlab, so if
+            % appropriate for your needs, remember to randomise the seed
+            % when starting a Matlab session with: rng('shuffle')
+            seed = randi([1 10000000],1); % pick a random seed
+            addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
+                sprintf( '".RNG.seed" <- %d' , whchain+seed ) };
+    end
     dataGenjags( initStructs, InitDataFullPath , addlines, dotranspose );
 end
 
