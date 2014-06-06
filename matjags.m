@@ -32,6 +32,8 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 %    2 = maximum number of messages
 % 'cleanup' - 0/1 -- do we want to remove PREVIOUS temporary files?
 % 'dotranspose' - Set to 0 (default) if you want to insure compatibility with matbugs/WinBUGS
+% 'rndseed' - set to 1 to randomise seed for each MCMC chain. Default is
+% set to 0, for no randomisation of the seed.
 %
 % OUTPUT
 % S contains the samples; each field may have a different shape:
@@ -71,7 +73,8 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 %         'verbosity' , 1 , ...
 %         'cleanup' , 0 , ...
 %         'showwarnings' , 1 , ...
-%         'workingdir' , 'tmpjags' );
+%         'workingdir' , 'tmpjags',...
+%         'rndseed' , 0);
 %
 % For Windows users:
 % The JAGS executable should be placed in the windows path
