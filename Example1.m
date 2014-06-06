@@ -61,7 +61,8 @@ tic
     'monitorparams', {'theta'}, ...     % List of latent variables to monitor
     'savejagsoutput' , 1 , ...          % Save command line output produced by JAGS?
     'verbosity' , 1 , ...               % 0=do not produce any output; 1=minimal text output; 2=maximum text output
-    'cleanup' , 0 );                    % clean up of temporary files?
+    'cleanup' , 0 ,...                  % clean up of temporary files?
+    'rndseed',1)                        % Randomise seed; 0=no; 1=yes
 toc
     
 %% Analyze samples produced by JAGS
