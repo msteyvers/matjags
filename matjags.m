@@ -159,6 +159,13 @@ if nmonitor == 0
     error( 'Please specify at least one node name to monitor' );
 end
 
+% Pick a random seed. Remember that 'randi' is itself subject to the random
+% seed, so you may wish to randomise this at the start of your matlab
+% session.
+if rndseed==1
+    seed = randi([1 10000000],1); 
+end 
+
 % Develop a separate JAGS script for each chain
 for whchain=1:nChains
     codastemFullPath     = fullfile(workingDirFullPath, sprintf( 'CODA%d' , whchain ));
@@ -200,13 +207,7 @@ for whchain=1:nChains
             addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
                 sprintf( '".RNG.seed" <- %d' , whchain ) };
         case{1}
-            % The 'randi' command below will pick a random seed. The seed
-            % for each chain will definititly be different as the chain
-            % number is added to this seed value. Remember that this randi
-            % command is itself subject to the seed within Matlab, so if
-            % appropriate for your needs, remember to randomise the seed
-            % when starting a Matlab session with: rng('shuffle')
-            seed = randi([1 10000000],1); % pick a random seed
+            % Start each chain with a unique random seed.
             addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
                 sprintf( '".RNG.seed" <- %d' , whchain+seed ) };
     end
