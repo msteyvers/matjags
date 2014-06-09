@@ -216,9 +216,8 @@ end
 
 % Do we use the Matlab parallel computing toolbox?
 if doParallel==1
-    numworkers = matlabpool('size');
-    if (numworkers == 0)
-        error( 'Matlab pool of workers not initialized. Use command "matlabpool open 7" for example to open up a pool of 7 workers' );
+    if isempty(gcp('nocreate'))
+        error( 'Matlab pool of workers not initialized. Use command "parpool(7)" for example to open up a pool of 7 workers' );
     end
     
     status = cell( 1,nChains );
