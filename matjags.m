@@ -1,6 +1,5 @@
 function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStructs , varargin)
 % MATJAGS, a Matlab interface for JAGS
-% Version 1.3.1. Tested on JAGS 3.3.0, Windows 64-bit version
 %
 % This code has been adapted from MATBUGS that was written by Kevin Murphy and Maryam Mahdaviani
 %

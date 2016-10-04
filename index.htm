@@ -41,82 +41,82 @@ h3           { color: #FF0000; font-size: 12pt }
 <table border="0" id="table8" width="810">
 	<tr>
 		<td >
-		<h1 class="style2">MATJAGS 1.3 <br>
+		<h1 class="style2">MATJAGS<br>
 		A Matlab interface for JAGS </h1>
 		</td>
 	</tr>
 	</table>
-<p style="width: 806px">This interface allows 
-<a href="http://www-ice.iarc.fr/~martyn/software/jags/">JAGS</a> (&quot;Just Another Gibbs 
-Sampler&quot;) to be used in combination with Matlab. JAGS is a program for Bayesian 
-hierarchical models using Markov chain Monte Carlo (MCMC) inference methods. JAGS is 
-similar to the OpenBUGS and WinBUGS programs but can operate on a number of 
+<p style="width: 806px">This interface allows
+<a href="http://www-ice.iarc.fr/~martyn/software/jags/">JAGS</a> (&quot;Just Another Gibbs
+Sampler&quot;) to be used in combination with Matlab. JAGS is a program for Bayesian
+hierarchical models using Markov chain Monte Carlo (MCMC) inference methods. JAGS is
+similar to the OpenBUGS and WinBUGS programs but can operate on a number of
 platforms including Windows and Max OS X.
 </p>
 <p style="width: 806px">This Matlab interface is based on
-<a href="http://code.google.com/p/matbugs/">matbugs</a> written by Kevin Murphy 
+<a href="http://code.google.com/p/matbugs/">matbugs</a> written by Kevin Murphy
 and Maryam Mahdaviani for
-<a href="http://www.mrc-bsu.cam.ac.uk/bugs/winbugs/contents.shtml">WinBUGS</a> and OpenBUGS. 
+<a href="http://www.mrc-bsu.cam.ac.uk/bugs/winbugs/contents.shtml">WinBUGS</a> and OpenBUGS.
 This JAGS interface uses very similar syntax.</p>
-<p style="width: 806px">One of the main advantages of this interface is that the 
+<p style="width: 806px">One of the main advantages of this interface is that the
 MCMC chains can run in parallel if the
 <a href="http://www.mathworks.com/products/parallel-computing/?s_cid=global_nav">
-Matlab Parallel Computing Toolbox</a> is installed. This can lead to near-linear 
-speedups in simulation time. For example, running 8 chains in parallel on a 
+Matlab Parallel Computing Toolbox</a> is installed. This can lead to near-linear
+speedups in simulation time. For example, running 8 chains in parallel on a
 8-core machine can lead to a speedup factor of almost 8.&nbsp; </p>
-<p style="width: 806px">This version of MATJAGS was tested on JAGS version 3.3.0, 
-with Matlab version R2013A. It was designed for a windows platform but the 
+<p style="width: 806px">This version of MATJAGS was tested on JAGS version 3.3.0,
+with Matlab version R2013A. It was designed for a windows platform but the
 latest code should also run on a Mac.</p>
 <h2><a name="Installation_&amp;_Licensing">Installation&nbsp; </a></h2>
 <table border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse" bordercolor="#111111" width="809" id="table6">
 	<tr>
 		<td width="809" valign="top">
 		<ol>
-			<li><a href="matjags.zip">Download the files for the matjags 
+			<li><a href="matjags.zip">Download the files for the matjags
 			interface</a><ul>
 				<li>Store the files in some working directory </li>
 			</ul>
 			</li>
 			<li>Install JAGS<ul>
 				<li>Visit the
-				<a href="http://www-ice.iarc.fr/~martyn/software/jags/">JAGS 
+				<a href="http://www-ice.iarc.fr/~martyn/software/jags/">JAGS
 				development site</a>
-				and follow instructions to install the latest windows version of JAGS. 
+				and follow instructions to install the latest windows version of JAGS.
 				This version of MATJAGS was tested on version 3.0.0</li>
 			</ul>
 			</li>
 			<li>[WINDOWS USERS] Place the JAGS bin directory in the Windows path<ul>
-				<li>The directory where the JAGS executable is stored should be 
+				<li>The directory where the JAGS executable is stored should be
 				placed in the windows path. </li>
-				<li>In Windows 7, go to Control Panel, System and Security, System 
+				<li>In Windows 7, go to Control Panel, System and Security, System
 				and click on &quot;Advanced System Settings&quot;
-				followed by &quot;Environment Variables&quot;. Under System variables, 
-				click on Path, and add the jags path to the string. 
-				This could look something like &quot;C:\Program 
-				Files\JAGS\JAGS-3.3.0\x64\bin&quot; or whatever the path is. 
-				Note that you should put a semicolon at the end of the existing 
+				followed by &quot;Environment Variables&quot;. Under System variables,
+				click on Path, and add the jags path to the string.
+				This could look something like &quot;C:\Program
+				Files\JAGS\JAGS-3.3.0\x64\bin&quot; or whatever the path is.
+				Note that you should put a semicolon at the end of the existing
 				path before pasting in the JAGS path.</li>
-				<li>If you have Matlab up and running already, quit Matlab and 
+				<li>If you have Matlab up and running already, quit Matlab and
 				start it again to make sure that the new path is used by Matlab.
 				</li>
-				<li>You can test whether the system path is updated by starting a 
+				<li>You can test whether the system path is updated by starting a
 				dos prompt window (type &quot;cmd&quot; in the &quot;search programs and
-				files&quot; box when you click the windows start button and type in 
-				&quot;JAGS&quot;. If the path is updated, it should start the JAGS 
+				files&quot; box when you click the windows start button and type in
+				&quot;JAGS&quot;. If the path is updated, it should start the JAGS
 				program).</li>
 			</ul>
 			</li>
-			<li>Place the folder where matjags.m is stored on your Matlab 
-				path. [WINDOWS USERS: in Windows 7, you'll have to run Matlab as administrator 
-				to change the Matlab path. <strong><em>If matjags.m is not stored on the 
+			<li>Place the folder where matjags.m is stored on your Matlab
+				path. [WINDOWS USERS: in Windows 7, you'll have to run Matlab as administrator
+				to change the Matlab path. <strong><em>If matjags.m is not stored on the
 				Matlab path, parallel execution might lead to errors]</em></strong></li>
 			<li>Test MATJAGS<ul>
-				<li>Run one of the example scripts for MATJAGS included in the 
-				package. It might be 
+				<li>Run one of the example scripts for MATJAGS included in the
+				package. It might be
 				helpful if the folder where MATJAGS is stored
-				is placed on the Matlab path. [WINDOWS USERS: to change the matlab path in 
+				is placed on the Matlab path. [WINDOWS USERS: to change the matlab path in
 				Windows 7, you'll have to run Matlab as an administrator
-				-- right click the matlab program icon, and choose &quot;run as 
+				-- right click the matlab program icon, and choose &quot;run as
 				administrator&quot;] </li>
 			</ul>
 			</li>
@@ -134,13 +134,13 @@ latest code should also run on a Mac.</p>
     </tr>
     <tr>
       <td style="width: 172px" valign="top" class="style5"><a name="Example_Scripts" href="Example1.html">exampleJAGS1</a></td>
-      <td valign="top" class="style5" style="width: 678px">running multiple MCMC chains serially 
+      <td valign="top" class="style5" style="width: 678px">running multiple MCMC chains serially
 		for rate inference problem</td>
       <td width="532" valign="top" class="style5">&nbsp;</td>
     </tr>
     <tr>
       <td style="width: 172px" valign="top" class="style3"><a name="Example_Scripts" href="Example2.html">exampleJAGS2</a></td>
-      <td valign="top" class="style3" style="width: 678px">running multiple MCMC 
+      <td valign="top" class="style3" style="width: 678px">running multiple MCMC
 		chains in parallel for rate inference problem</td>
       <td width="532" valign="top" class="style3"><a name="Example_Scripts4">
 		Parallel Computing Toolbox</td>
@@ -154,7 +154,7 @@ latest code should also run on a Mac.</p>
 		<a name="Example_Scripts0">
       <td style="width: 172px" valign="top" class="style3"><a name="Example_Scripts1" href="Example4.html">
 		exampleJAGS4</a></td>
-      <td valign="top" class="style3" style="width: 678px">calculate the speedup factor when running the MCMC chains 
+      <td valign="top" class="style3" style="width: 678px">calculate the speedup factor when running the MCMC chains
 		in parallel</td>
   </a>
       <td width="532" valign="top" class="style3"><a name="Example_Scripts5">
@@ -184,7 +184,7 @@ latest code should also run on a Mac.</p>
 </blockquote>
 
 <h2><a name="Authors1">Updates</h2>
-<p class="style1">10/31/2011&nbsp;&nbsp;&nbsp; Matjags was updated to work with 
+<p class="style1">10/31/2011&nbsp;&nbsp;&nbsp; Matjags was updated to work with
 Mac platforms (thanks to Mike Kalish for helpful suggestions)</p>
 
 <h2><a name="Authors0">Inquiries about the Matlab interface</h2>
