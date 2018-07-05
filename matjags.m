@@ -1,5 +1,6 @@
-function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStructs , varargin)
+function [samples, stats, structArray] = matjags(dataStruct, jagsFilenm, initStructs , varargin)
 % MATJAGS, a Matlab interface for JAGS
+% Version 1.3.2. Tested on JAGS 3.3.0, Windows 64-bit version
 %
 % This code has been adapted from MATBUGS that was written by Kevin Murphy and Maryam Mahdaviani
 %
@@ -7,7 +8,7 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 %
 % INPUT:
 % dataStruct contains values of observed variables.
-% jagsModel is the name of the model file or a string that contains a jags model
+% jagsFilenm is the name of the model file
 % initStructs contains initial values for the latent variables (unlike
 % matbugs, this is a required variable)
 
@@ -18,7 +19,6 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 % insensitive]:
 % 'monitorParams' - cell array of field names (use 'a_b' instead of 'a.b')
 %                   [defaults to *, which currently does nothing...]
-% 'nAdapt'   - number of adaptation steps [1000]
 % 'nChains'  - number of chains [3]
 % 'nBurnin'  - num samples for burn-in per chain [1000]
 % 'nSamples' - num samples to keep after burn-in [5000]
@@ -32,8 +32,6 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 %    2 = maximum number of messages
 % 'cleanup' - 0/1 -- do we want to remove PREVIOUS temporary files?
 % 'dotranspose' - Set to 0 (default) if you want to insure compatibility with matbugs/WinBUGS
-% 'rndseed' - set to 1 to randomise seed for each MCMC chain. Default is
-% set to 0, for no randomisation of the seed.
 %
 % OUTPUT
 % S contains the samples; each field may have a different shape:
@@ -58,31 +56,29 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 %
 % Example
 %
-% 		[samples, stats ] = matjags( ...
-% 			datastruct, ...
-% 			fullfile(pwd, 'Gaussian_3.txt'), ...
-% 			init0, ...
-% 			'doparallel' , 0, ...
-% 			'nAdapt', 1000, ...
-% 			'nchains', nchains,...
-% 			'nburnin', nburnin,...
-% 			'nsamples', nsamples, ...
-% 			'thin', 1, ...
-% 			'dic' , 1,...
-% 			'monitorparams', {'mu','sigma'}, ...
-% 			'savejagsoutput' , 1 , ...
-% 			'verbosity' , 1 , ...
-% 			'cleanup' , 0 , ...
-% 			'showwarnings' , 1 , ...
-% 			'workingdir' , 'tmpjags',...
-% 			'rndseed' , 0);
+%     [samples, stats ] = matjags( ...
+%         datastruct, ...
+% 		  fullfile(pwd, 'Gaussian_3.txt'), ...
+% 		  init0, ...
+%         'doparallel' , 0, ...
+%         'nchains', nchains,...
+% 		  'nburnin', nburnin,...
+%         'nsamples', nsamples, ...
+% 		  'thin', 1, ...
+%         'dic' , 1,...
+% 		  'monitorparams', {'mu','sigma'}, ...
+% 		  'savejagsoutput' , 1 , ...
+%         'verbosity' , 1 , ...
+%         'cleanup' , 0 , ...
+%         'showwarnings' , 1 , ...
+%         'workingdir' , 'tmpjags' );
 %
 % For Windows users:
 % The JAGS executable should be placed in the windows path
 % In Windows 7, go to Control Panel, System and Security, System
 % and click on "Advanced System Settings" followed by "Environment Variables"
 % Under System variables, click on Path, and add the jags path to the string
-% This could look something like "C:\Program Files\JAGS\JAGS-3.3.0\x64\bin"
+% This could look something like "C:\Program Files\JAGS\JAGS-4.3.0\x64\bin"
 %
 % For MAC users:
 % Mike Kalish provided some suggestions to make matjags work on a Mac. These were implemented
@@ -92,6 +88,10 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 % Written by Mark Steyvers (mark.steyvers@uci.edu) based on the code
 % MATBUGS that was written by Maryam Mahdaviani (maryam@cs.ubc.ca)
 % and Kevin Murphy (murphyk@cs.ubc.ca)
+
+% Changes in version 1.3.2:
+% * Bug fix. Fixed issue with initialization of parameter values. All values were set to the value for 
+% chain 1.
 
 % Changes in version 1.3:
 % * Bug fix. Added lines marked by "% GP" as suggested by Ganesh Padmanabhan
@@ -103,17 +103,21 @@ function [samples, stats, structArray] = matjags(dataStruct, jagsModel, initStru
 % * Changed the default working directory for JAGS to make it platform
 % independent
 
-defaultworkingDir = tempname;
+
+
+if ispc
+    defaultworkingDir = 'c:\temp\jagstmp'; % change this to fit your particular needs
+elseif ismac | isunix
+    defaultworkingDir = [ '..' filesep 'jagstmp' ]; % change this to fit your particular needs
+end
 
 % Get the parameters
-[ nChains, workingDir, nAdapt, nBurnin, nSamples, monitorParams, thin, dodic,...
-    doParallel, savejagsoutput, verbosity, cleanup, showwarnings,...
-    dotranspose, rndseed, doboot ] =  ...
+[ nChains, workingDir, nBurnin, nSamples, ...
+    monitorParams, thin, dodic, doParallel, savejagsoutput, verbosity, cleanup, showwarnings,dotranspose,doboot ] =  ...
     process_options(...
     varargin, ...
     'nChains', 1, ...
     'workingDir', defaultworkingDir, ...
-		'nAdapt', 1000, ...
     'nBurnin', 1000, ...
     'nSamples', 5000, ...
     'monitorParams', {}, ...
@@ -124,73 +128,78 @@ defaultworkingDir = tempname;
     'verbosity' , 0,...
     'cleanup' , 0, ...
     'showwarnings' , 0 , ...
-    'dotranspose' , 0 , ...
-    'rndseed',0);
-
-isWorkDirTemporary = strcmp(defaultworkingDir, workingDir) && ~exist(workingDir, 'file');
+    'dotranspose' , 0 );
 
 if length( initStructs ) ~= nChains
     error( 'Number of structures with initial values should match number of chains' );
 end
 
-if is_modelstring(jagsModel)
-    workingDirFullPath = get_working_directory(workingDir);
-    modelFullPath = fullfile(workingDirFullPath, 'jags_model.jags');
-    fid = fopen(modelFullPath, 'w');
-    if fid == -1
-        error(['Cannot write model to "', modelFullPath, '"' ]);
+[ whdir , jagsModelBase , modelextension ] = fileparts( jagsFilenm );
+jagsModel = [ jagsModelBase modelextension ];
+
+% get the current directory
+curdir = pwd;
+cd( whdir );
+%[status,result] = dos( 'dir' )
+
+% Does the temporary directory exist? If not, create it
+if ~exist( workingDir , 'dir' )
+    [SUCCESS,MESSAGE,MESSAGEID] = mkdir(workingDir);
+    if SUCCESS == 0
+        error( MESSAGE );
     end
-    fprintf(fid, '%s', jagsModel);
-    fclose(fid);
-else
-    [modelFullPath, workingDirFullPath] = get_model_and_working_directory_paths(jagsModel, workingDir);
 end
+
+cd( workingDir );
 
 % Do we want to cleanup files before we start?
 if cleanup==1
-    delete( fullfile(workingDirFullPath, 'CODA*') );
-    delete( fullfile(workingDirFullPath, 'jag*') );
+    delete( 'CODA*' );
+    delete( 'jag*' );
 end
 
 % Create the data file
-jagsDataFullPath = fullfile(workingDirFullPath, 'jagsdata.R');
-dataGenjags(dataStruct, jagsDataFullPath , '', dotranspose );
+jagsData = 'jagsdata.R';
+dataGenjags(dataStruct, jagsData , '', dotranspose );
+
 
 nmonitor = length( monitorParams );
 if nmonitor == 0
     error( 'Please specify at least one node name to monitor' );
 end
 
-% Pick a random seed. Remember that 'randi' is itself subject to the random
-% seed, so you may wish to randomise this at the start of your matlab
-% session.
-if rndseed==1
-    seed = randi([1 10000000],1); 
-end 
-
 % Develop a separate JAGS script for each chain
 for whchain=1:nChains
-    codastemFullPath     = fullfile(workingDirFullPath, sprintf( 'CODA%d' , whchain ));
-    InitDataFullPath     = fullfile(workingDirFullPath, sprintf( 'jagsinit%d.R' , whchain ));
+    jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
+    codastem     = sprintf( 'CODA%d' , whchain );
+    InitData     = sprintf( 'jagsinit%d.R' , whchain );
     
     % Create the jags script for this chain
-    jagsScriptFullPath   = fullfile(workingDirFullPath, sprintf( 'jagscript%d.cmd' , whchain ));
-    [ fid , message ] = fopen( jagsScriptFullPath , 'wt' );
+    [ fid , message ] = fopen( jagsScript , 'wt' );
     if fid == -1
         error( message );
     end
     
+    fprintf( fid , 'load wiener\n' ); % Adding the Wiener Diffusion model
+    fprintf( fid , 'load glm\n' );
+    
+    %fprintf( fid , 'model in "..%s%s"\n' , filesep , jagsModel' );
     if dodic
         fprintf( fid , 'load dic\n' );
     end
+        
+    if ~isempty(whdir) && (strcmp(whdir(1),filesep) || (length(whdir) > 2 && whdir(2) == ':'))
+        % Case when a full path string is specified for the jagsModel
+        fprintf( fid , 'model in "%s"\n' , fullfile(whdir , jagsModel));
+    else
+        % Case when a relative path string is specified for the jagsModel
+        fprintf( fid , 'model in "%s"\n' , fullfile(curdir , whdir, jagsModel));
+    end
     
-    fprintf( fid , 'model in "%s"\n' , modelFullPath);
-    
-    fprintf( fid , 'data in "%s"\n' , jagsDataFullPath );
+    fprintf( fid , 'data in %s\n' , jagsData' );
     fprintf( fid , 'compile, nchains(1)\n' );
-    fprintf( fid , 'parameters in "%s"\n' , InitDataFullPath );
+    fprintf( fid , 'parameters in %s\n' , InitData );
     fprintf( fid , 'initialize\n' );
-		fprintf( fid , 'adapt %d\n' , nAdapt );
     fprintf( fid , 'update %d\n' , nBurnin );
     for j=1:nmonitor
         fprintf( fid , 'monitor set %s, thin(%d)\n' , monitorParams{ j } , thin );
@@ -201,54 +210,68 @@ for whchain=1:nChains
         %fprintf( fid , 'monitor pD\n' );
     end
     fprintf( fid , 'update %d\n' , nSamples * thin );
-    fprintf( fid , 'coda *, stem(''%s'')\n' , codastemFullPath );
+    fprintf( fid , 'coda *, stem(''%s'')\n' , codastem );
     fclose( fid );
     
     % Create the init file
-    switch rndseed
-        case{0}
-            addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
-                sprintf( '".RNG.seed" <- %d' , whchain ) };
-        case{1}
-            % Start each chain with a unique random seed.
-            addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
-                sprintf( '".RNG.seed" <- %d' , whchain+seed ) };
-    end
-    dataGenjags( initStructs, InitDataFullPath , addlines, dotranspose );
+    addlines = { '".RNG.name" <- "base::Mersenne-Twister"' , ...
+        sprintf( '".RNG.seed" <- %d' , whchain ) };
+    dataGenjags( initStructs( whchain ), InitData , addlines, dotranspose );
 end
 
 % Do we use the Matlab parallel computing toolbox?
 if doParallel==1
-    if isempty(gcp('nocreate'))
-        error( 'Matlab pool of workers not initialized. Use command "parpool(7)" for example to open up a pool of 7 workers' );
-    end
+    %numworkers = matlabpool('size');
+    %if (numworkers == 0)
+    %    error( 'Matlab pool of workers not initialized. Use command "matlabpool open 7" for example to open up a pool of 7 workers' );
+    %end
     
     status = cell( 1,nChains );
     result = cell( 1,nChains );
-    parfor whchain=1:nChains
-        if verbosity > 0
-            fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
+    if ispc
+        parfor whchain=1:nChains
+            jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
+            cmd = sprintf( 'jags %s' , jagsScript );
+            if verbosity > 0
+                fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
+            end
+            [status{ whchain },result{whchain}] = dos( cmd );
         end
-        jagsScript   = fullfile(workingDirFullPath, sprintf( 'jagscript%d.cmd' , whchain ));
-        [status{ whchain },result{whchain}] = run_jags_script(jagsScript); 
+    elseif ismac | isunix
+        parfor whchain=1:nChains
+            jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
+            jagsPrefix = sprintf('/usr/local/bin/');
+            cmd = sprintf( '%sjags %s' ,jagsPrefix, jagsScript );
+            if verbosity > 0
+                fprintf( 'Running chain %d (parallel execution)\n' , whchain  );
+            end
+            [status{ whchain },result{whchain}] = dos( cmd );
+        end
     end
+    
 else % Run each chain serially
     status = cell( 1,nChains );
     result = cell( 1,nChains );
     for whchain=1:nChains
+        jagsScript   = sprintf( 'jagscript%d.cmd' , whchain );
+        if ispc
+            cmd = sprintf( 'jags %s' , jagsScript );
+        elseif ismac | isunix
+            jagsPrefix = sprintf('/usr/local/bin/');
+            cmd = sprintf( '%sjags %s' ,jagsPrefix, jagsScript );
+        end
         if verbosity > 0
             fprintf( 'Running chain %d (serial execution)\n' , whchain );
         end
-        jagsScript   = fullfile(workingDirFullPath, sprintf( 'jagscript%d.cmd' , whchain ));
-        [status{ whchain },result{whchain}] = run_jags_script(jagsScript);
+        [status{ whchain },result{whchain}] = dos( cmd );
     end
 end
 
 % Save the output from JAGS to a text file?
 if savejagsoutput==1
     for whchain=1:nChains
-        filenmFullPath = fullfile(workingDirFullPath, sprintf( 'jagoutput%d.txt' , whchain ));
-        [ fid , message ] = fopen( filenmFullPath , 'wt' );
+        filenm = sprintf( 'jagoutput%d.txt' , whchain );
+        [ fid , message ] = fopen( filenm , 'wt' );
         if fid == -1
             error( message );
         end
@@ -264,13 +287,15 @@ for whchain=1:nChains
     resultnow = result{whchain};
     statusnow = status{ whchain };
     if status{whchain} > 0
-        error( [ 'Error from system environment: ' resultnow ] );
+        cd( curdir );
+        error( [ 'Error from dos environment: ' resultnow ] );
     end
     
     % Do we get an error message anywhere from JAGS --> produce an error
     pattern = [ 'can''t|RUNTIME ERROR|syntax error|failed' ];
     errstr = regexpi( resultnow , pattern , 'match' );
     if ~isempty( errstr )
+        cd( curdir );
         fprintf( 'Error encountered in jags (chain %d). Check output from JAGS below:\n' , whchain  );
         fprintf( 'JAGS output for chain %d\n%s\n' , whchain , resultnow );
         error( 'Stopping execution because of jags error' );
@@ -296,17 +321,18 @@ for whchain=1:nChains
 end
 
 %% Extract information from the output files so we can pass it back to Matlab
-% the index files are identical across chains, just pick first one
-codaIndexFullPath = fullfile(workingDirFullPath, 'CODA1index.txt');
+codaIndex = 'CODA1index.txt'; % the index files are identical across chains, just pick first one
 for i=1:nChains
-    codaFFullPath = fullfile(workingDirFullPath, [ 'CODA' , num2str(i) , 'chain1.txt' ]);
+    codaF = [ 'CODA' , num2str(i) , 'chain1.txt' ];
     
-    S = bugs2mat(codaIndexFullPath, codaFFullPath);
+    S = bugs2mat(codaIndex, codaF);
     structArray(i) = S;
 end
 samples = structsToArrays(structArray);
 stats = computeStats(samples,doboot);
 
+
+cd( curdir );
 
 %% DIC calculation
 if dodic
@@ -316,105 +342,9 @@ if dodic
     stats.dic = pd + dbar;
 end
 
-if isWorkDirTemporary
-    delete(fullfile(workingDirFullPath, 'jag*'));
-    delete(fullfile(workingDirFullPath, 'CODA*'));
-    rmdir(workingDirFullPath);
-end
-
 end
 
 %% ----- nested functions -----------------
-
-function result = is_modelstring(string)
-    result = ~isempty(regexp(string, '^\s*model\s*\{'));
-end
-
-function [status, result] = run_jags_script(jagsScript)
-    if ispc
-        jagsPath = 'jags';
-    else
-        possibleDirectories = {'/usr/local/bin/', '/usr/bin/'};
-        jagsPath = get_jags_path_from_possible_directories(possibleDirectories);
-    end
-    cmd = sprintf('%s %s', jagsPath, jagsScript);
-    if ispc()
-        [status, result] = dos( cmd );
-    else
-        [status, result] = unix( cmd );
-    end
-end
-
-function path = get_jags_path_from_possible_directories(possibleDirectories)
-    for i=1:length(possibleDirectories)
-        if is_jags_directory(possibleDirectories{i})
-            path = fullfile(possibleDirectories{i}, 'jags');
-            return
-        end
-    end
-    path = 'jags';
-end
-
-function result = is_jags_directory(directory)
-    if ispc()
-        jags = fullfile(directory, 'jags.bat');
-    else
-        jags = fullfile(directory, 'jags');
-    end
-    result = exist(jags, 'file');
-end
-
-function workingDirFullPath = get_working_directory(workingDir)
-    curdir = pwd;
-    % Does the temporary directory exist? If not, create it
-    if ~exist( workingDir , 'dir' )
-        [SUCCESS,MESSAGE,MESSAGEID] = mkdir(workingDir);
-        if SUCCESS == 0
-            error( MESSAGE );
-        end
-    end
-    cd(workingDir);
-    workingDirFullPath = pwd();
-    cd(curdir);
-end
-
-function [modelFullPath, workingDirFullPath] = get_model_and_working_directory_paths(jagsFilenm, workingDir)
-    % get the current directory
-    curdir = pwd;
-
-    [ whdir , jagsModelBase , modelextension ] = fileparts( jagsFilenm );
-    jagsModel = [ jagsModelBase modelextension ];
-
-    cd( whdir );
-	
-	% expand home dir (~) to absolute path
-	if strncmp(whdir, '~', 1)
-		whdir = [getenv('HOME') whdir(2:end)];
-	end
-
-    if ~isempty(whdir) && (strcmp(whdir(1),filesep) || (length(whdir) > 2 && whdir(2) == ':'))
-        % Case when a full path string is specified for the jagsModel
-        modelFullPath = fullfile(whdir , jagsModel);
-    else
-        % Case when a relative path string is specified for the jagsModel
-        modelFullPath = fullfile(curdir, whdir, jagsModel);
-    end
-
-    % Does the temporary directory exist? If not, create it
-    if ~exist( workingDir , 'dir' )
-        [SUCCESS,MESSAGE,MESSAGEID] = mkdir(workingDir);
-        if SUCCESS == 0
-            error( MESSAGE );
-        end
-    end
-
-    cd( workingDir );
-
-    workingDirFullPath = pwd();
-
-    cd(curdir);
-end
-
 function dataGenjags(dataStruct, fileName, addlines, dotranspose )
 % This is a helper function to generate data or init files for JAGS
 % Inputs:
@@ -651,9 +581,7 @@ function stats = computeStats(A,doboot)
 
 fld = fieldnames(A);
 N = length(fld);
-stats = struct('Rhat',[], 'mean', [], 'std', [],...
-	'ci_low' , [] , 'ci_high' , [],...
-	'hdi_low', [] , 'hdi_high' , []);
+stats = struct('Rhat',[], 'mean', [], 'std', [], 'ci_low' , [] , 'ci_high' , [] );
 for fi=1:length(fld)
     fname = fld{fi};
     samples = getfield(A, fname);
@@ -670,7 +598,7 @@ for fi=1:length(fld)
     % "estimated potential scale reduction" statistics due to Gelman and
     % Rubin.
     if Nchains > 1
-        B = (Nsamples/Nchains-1) * ...
+        B = (Nsamples/(Nchains-1)) * ...
             sum((st_mean_per_chain - repmat(st_mean_overall, [Nchains,1])).^2);
         varPerChain = var(samples, 0, 2);
         W = (1/Nchains) * sum(varPerChain);
@@ -693,9 +621,6 @@ for fi=1:length(fld)
     ci_samples_overall_low = ci_samples_overall( 1,: );
     ci_samples_overall_high = ci_samples_overall( 2,: );
     
-		% get the 95% highest density intervals
-		[hdi_samples_overall_low, hdi_samples_overall_high] = HDIofSamples(reshaped_samples);
-		
     if ~isnan(Rhat)
         stats.Rhat = setfield(stats.Rhat, fname, squeeze(Rhat));
     end
@@ -713,10 +638,69 @@ for fi=1:length(fld)
     
     stats.ci_low = setfield(stats.ci_low, fname, squeeze(ci_samples_overall_low));
     stats.ci_high = setfield(stats.ci_high, fname, squeeze(ci_samples_overall_high));
-		
-		stats.hdi_low = setfield(stats.hdi_low, fname, squeeze(hdi_samples_overall_low));
-    stats.hdi_high = setfield(stats.hdi_high, fname, squeeze(hdi_samples_overall_high));
 end
+end
+
+
+%%%%%%%%%%%%
+% Andrew Jackson - function getDICstats added a.jackson@tcd.ie
+% Used to retrieve the DIC statistics from the log file
+% if matbugs input DICstatus = 1
+% This code is probably a bit clunky but it does the job.
+% Note that the values read from the log file have 3 decimal places but
+% matlab decides to give them 4 - with a zero tagged on the end. The
+% precision is obviously only to 3 decimal places. sscanf.m does not seem
+% to recognise the field-width and precision codes that sprintf.m does.
+function DICstats = getDICstats(workingDir)
+DICstats = [];
+FIDlog = fopen([workingDir '\log.txt'],'r');
+ct = 0;
+test = 0;
+endloop = 0;
+while 1
+    
+    tline = fgets(FIDlog);
+    
+    if tline == -1; break; end
+    if endloop; break; end
+    
+    if strfind(tline,'dic.set cannot be executed');
+        DICstats.error = 'DIC monitor could not be set by WinBUGS';
+    end
+    
+    if size(tline,2)>6
+        % The string 'total' in the log file denotes the end of the DIC
+        % stats so the loop can be ended in the next iteration.
+        if strcmp(tline(1:5),'total'); endloop = 1; end;
+    end
+    
+    if size(tline,2)>2
+        % locate the DIC string identifier in the log file
+        if strcmp(tline(1:3),'DIC'); test = 1; end
+    end
+    
+    if test
+        ct=ct+1;
+        % DIC results are located 3 lines after the DIC string identifier
+        % in the log file.
+        if ct >= 4
+            A = sscanf(tline,'%*s %f %f %f %f');
+            S = sscanf(tline, '%s %*f %*f %*f %*f');
+            % Cheng-Ta, Yang suggested this change
+            %DICstats = setfield(DICstats,S,'Dbar',A(1));
+            %%DICstats = setfield(DICstats,S,'Dhat',A(2));
+            %DICstats = setfield(DICstats,S,'pD',A(3));
+            %DICstats = setfield(DICstats,S,'DIC',A(4));
+            DICstats.S.Dbar = A(1);
+            DICstats.S.Dhat = A(2);
+            DICstats.S.pD = A(3);
+            DICstats.S.DIC = A(4);
+            DICstats.S.Dhat = A(2);
+        end
+    end
+end
+
+fclose(FIDlog)
 end
 
 %%%%%%%%%%%%
@@ -916,33 +900,5 @@ if (~warn)
     else
         varargout{nout} = cell(0);
     end
-end
-end
-
-
-function [HDI_lower, HDI_upper] = HDIofSamples(samples)
-% Calculate the 95% Highest Density Intervals. This has advantages over the
-% regular 95% credible interval for some 'shapes' of distribution.
-% 
-% Translated by Benjamin T. Vincent (www.inferenceLab.com) from code in:
-% Kruschke, J. K. (2015). Doing Bayesian Data Analysis: A Tutorial with R, 
-% JAGS, and Stan. Academic Press.
-
-credibilityMass = 0.95;
-
-[nSamples, N] = size(samples);
-for i=1:N
-	selectedSortedSamples = sort(samples(:,i));
-	ciIdxInc = floor( credibilityMass * numel( selectedSortedSamples ) );
-	nCIs = numel( selectedSortedSamples ) - ciIdxInc;
-	
-	ciWidth=zeros(nCIs,1);
-	for n =1:nCIs
-		ciWidth(n) = selectedSortedSamples( n + ciIdxInc ) - selectedSortedSamples(n);
-	end
-	
-	[~, minInd] = min(ciWidth);
-	HDI_lower(i)	= selectedSortedSamples( minInd );
-	HDI_upper(i)	= selectedSortedSamples( minInd + ciIdxInc);
 end
 end
